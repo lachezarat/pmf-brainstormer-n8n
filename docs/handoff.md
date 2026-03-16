@@ -26,11 +26,11 @@ The parent workflow loads these subflows from disk:
 
 ## Airtable Setup
 
-Use [airtable-setup.md](/home/lucho/contra/docs/airtable-setup.md#L1) for the exact setup sequence.
+Use [airtable-setup.md](airtable-setup.md) for the exact setup sequence.
 
 Quick version:
 
-1. import the CSV templates from [fixtures/airtable/](/home/lucho/contra/fixtures/airtable)
+1. import the CSV templates from [fixtures/airtable/](../fixtures/airtable/)
 2. rename the tables to:
    - `Runs`
    - `Stage Attempts`
@@ -64,7 +64,7 @@ Quick version:
    - `needs_changes`
 5. Airtable `Gate Decisions` is updated to reflect the operator outcome.
 
-Sample payload: [request.review.json](/home/lucho/contra/fixtures/request.review.json#L1)
+Sample payload: [request.review.json](../fixtures/request.review.json)
 
 ## Backup And Restore
 

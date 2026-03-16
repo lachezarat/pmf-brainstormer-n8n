@@ -58,9 +58,9 @@ Suggested linked tables:
 - `Experiments`
 - `Prompt Configs`
 
-`Prompt Configs` is now runtime-active. It can override stage prompt template, schema, fallback payload, model, temperature, and retry count. See [airtable-control-plane.md](/home/lucho/contra/docs/airtable-control-plane.md#L1).
+`Prompt Configs` is now runtime-active. It can override stage prompt template, schema, fallback payload, model, temperature, and retry count. See [airtable-control-plane.md](docs/airtable-control-plane.md).
 
-For the fastest working setup, use the importable Airtable templates in [fixtures/airtable/](/home/lucho/contra/fixtures/airtable) and follow [airtable-setup.md](/home/lucho/contra/docs/airtable-setup.md#L1).
+For the fastest working setup, use the importable Airtable templates in [fixtures/airtable/](fixtures/airtable/) and follow [airtable-setup.md](docs/airtable-setup.md).
 
 ## Repo Layout
 
@@ -79,24 +79,30 @@ For the fastest working setup, use the importable Airtable templates in [fixture
 
 1. Copy `.env.example` to `.env`.
 2. Fill in `GEMINI_API_KEY` and `EXA_API_KEY`.
-3. Set `AIRTABLE_CONTROL_PLANE_ENABLED=true` only if you want live Airtable sync and runtime prompt config.
-4. Start the stack:
+3. Change `N8N_BASIC_AUTH_PASSWORD` from the placeholder value before you expose the stack anywhere.
+4. Set `AIRTABLE_CONTROL_PLANE_ENABLED=true` only if you want live Airtable sync and runtime prompt config.
+5. Start the stack:
 
 ```bash
 docker compose up -d
 ```
 
-5. Open `http://localhost:5678`.
-6. Create one `Postgres` credential in n8n:
+6. Open `http://localhost:5678`.
+7. On first run, complete n8n's owner-account setup page.
+8. Create one `Postgres` credential in n8n using the values from `.env`.
+   Default values from `.env.example`:
    Host: `postgres`
    Port: `5432`
-   Database: `POSTGRES_DB`
-   User: `POSTGRES_USER`
-   Password: `POSTGRES_PASSWORD`
+   Database: `n8n`
+   User: `n8n`
+   Password: `n8n`
 
 If your Postgres volume already existed before the runtime-control-plane upgrade, apply the extra migrations once:
 
 ```bash
+set -a
+source .env
+set +a
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/002_control_plane_state.sql
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /docker-entrypoint-initdb.d/003_runtime_control_plane.sql
 ```
@@ -121,6 +127,7 @@ Then do the manual bindings:
 1. Attach your single `Postgres` credential to every Postgres node in the imported workflows.
 2. In `PMF Brainstormer API`, set `Settings -> Error Workflow -> PMF Brainstormer Error Handler`.
 3. Activate `PMF Brainstormer API`, `PMF Brainstormer Status API`, and `PMF Brainstormer Review API`.
+4. The error-handler workflow is referenced from settings and does not need its own active toggle.
 
 Gemini, Exa, and Airtable use env vars and do not require n8n UI credentials in this repo version.
 
@@ -150,11 +157,11 @@ curl -X POST http://localhost:5678/webhook/pmf-brainstorm-review \
 
 ## Handoff And Backups
 
-- [architecture.md](/home/lucho/contra/docs/architecture.md#L1) explains the workflow topology.
-- [portfolio-case-study.md](/home/lucho/contra/docs/portfolio-case-study.md#L1) is the public-facing case-study narrative.
-- [airtable-setup.md](/home/lucho/contra/docs/airtable-setup.md#L1) is the exact Airtable bootstrap guide with field types and env steps.
-- [handoff.md](/home/lucho/contra/docs/handoff.md#L1) covers import order, credentials, Airtable setup, and restore steps.
-- [screenshot-checklist.md](/home/lucho/contra/docs/screenshot-checklist.md#L1) lists the strongest artifacts to capture for the public repo and portfolio.
+- [architecture.md](docs/architecture.md) explains the workflow topology.
+- [portfolio-case-study.md](docs/portfolio-case-study.md) is the public-facing case-study narrative.
+- [airtable-setup.md](docs/airtable-setup.md) is the exact Airtable bootstrap guide with field types and env steps.
+- [handoff.md](docs/handoff.md) covers import order, credentials, Airtable setup, and restore steps.
+- [screenshot-checklist.md](docs/screenshot-checklist.md) lists the strongest artifacts to capture for the public repo and portfolio.
 - `node scripts/create-backup-bundle.mjs` exports workflows, docs, fixtures, and the static site into `workflow-backups/`.
 
 ## Deployment Shape
@@ -165,7 +172,7 @@ This project is intended for a split deployment:
 - `n8n + Postgres` on a VPS with Docker Compose
 - Airtable as the external operator database
 
-Netlify should host the case-study frontend, not the `n8n` runtime itself. See [deployment.md](/home/lucho/contra/docs/deployment.md#L1).
+Netlify should host the case-study frontend, not the `n8n` runtime itself. See [deployment.md](docs/deployment.md).
 
 ## Portfolio Notes
 

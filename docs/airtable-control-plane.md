@@ -2,7 +2,7 @@
 
 This project uses Airtable as the operator-facing control plane and Postgres as the durable execution ledger.
 
-If you want the exact bootstrap sequence, use [airtable-setup.md](/home/lucho/contra/docs/airtable-setup.md#L1). It includes importable CSV templates, field types, link setup, env wiring, and a smoke test path.
+If you want the exact bootstrap sequence, use [airtable-setup.md](airtable-setup.md). It includes importable CSV templates, field types, link setup, env wiring, and a smoke test path.
 
 ## Why Airtable Exists Here
 
@@ -119,9 +119,9 @@ Behavior:
 - if lookup fails or config is missing, the stage falls back to the code-defined default
 - the resolved config snapshot is logged into `pmf_stage_runs` and synced to Airtable `Stage Attempts`
 
-Starter seed data is included in [prompt-configs.csv](/home/lucho/contra/fixtures/airtable/prompt-configs.csv#L1).
+Starter seed data is included in [prompt-configs.csv](../fixtures/airtable/prompt-configs.csv).
 
-Importable starter table templates are included in [fixtures/airtable/](/home/lucho/contra/fixtures/airtable).
+Importable starter table templates are included in [fixtures/airtable/](../fixtures/airtable/).
 
 ## Workflow Behavior
 

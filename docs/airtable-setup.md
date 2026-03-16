@@ -14,15 +14,15 @@ The workflow writes to Airtable by exact field name. If a field name does not ma
 
 1. Create a base named `PMF Brainstormer Control Plane`.
 2. Import these CSV templates as separate tables:
-   - [runs-template.csv](/home/lucho/contra/fixtures/airtable/runs-template.csv)
-   - [stage-attempts-template.csv](/home/lucho/contra/fixtures/airtable/stage-attempts-template.csv)
-   - [gate-decisions-template.csv](/home/lucho/contra/fixtures/airtable/gate-decisions-template.csv)
-   - [experiments-template.csv](/home/lucho/contra/fixtures/airtable/experiments-template.csv)
-3. Import [prompt-configs.csv](/home/lucho/contra/fixtures/airtable/prompt-configs.csv) as the `Prompt Configs` table.
+   - [runs-template.csv](../fixtures/airtable/runs-template.csv)
+   - [stage-attempts-template.csv](../fixtures/airtable/stage-attempts-template.csv)
+   - [gate-decisions-template.csv](../fixtures/airtable/gate-decisions-template.csv)
+   - [experiments-template.csv](../fixtures/airtable/experiments-template.csv)
+3. Import [prompt-configs.csv](../fixtures/airtable/prompt-configs.csv) as the `Prompt Configs` table.
 4. Convert the field types listed below.
 5. Convert the `Run` field in `Stage Attempts`, `Gate Decisions`, and `Experiments` into a linked record field pointing to `Runs`.
 6. Create a Personal Access Token in Airtable with record read and write access to this base.
-7. Copy the Airtable base ID and set the Airtable env vars in [.env](/home/lucho/contra/.env#L1).
+7. Copy the Airtable base ID and set the Airtable env vars in your local `.env` file based on [`.env.example`](../.env.example).
 8. Restart `n8n`.
 9. Run one request, poll status, and confirm records appear in Airtable.
 
@@ -141,7 +141,7 @@ Grant the token access to the specific base, not your whole workspace.
 
 The Airtable base ID is the `app...` identifier for the base. Grab it from Airtable's developer/API view for that base before you fill in the env vars.
 
-Set these env vars in [.env](/home/lucho/contra/.env#L1):
+Set these env vars in your local `.env` file based on [`.env.example`](../.env.example):
 
 - `AIRTABLE_CONTROL_PLANE_ENABLED=true`
 - `AIRTABLE_TOKEN=<your_token>`

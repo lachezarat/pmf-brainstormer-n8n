@@ -16,4 +16,4 @@ After import:
 - convert the `Run` field in child tables into a linked record pointing to `Runs`
 - convert `Enabled` in `Prompt Configs` into a checkbox
 
-Exact field types and setup steps are documented in [airtable-setup.md](/home/lucho/contra/docs/airtable-setup.md#L1).
+Exact field types and setup steps are documented in [airtable-setup.md](../../docs/airtable-setup.md).
