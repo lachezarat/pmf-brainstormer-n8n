@@ -1,14 +1,5 @@
 (function () {
   var config = window.PORTFOLIO_CONFIG || {};
-  var fallbackBaseUrl = "https://your-backend.example";
-
-  function normalizeBaseUrl(value) {
-    if (!value) {
-      return "";
-    }
-
-    return String(value).replace(/\/+$/, "");
-  }
 
   function setConfigLinks() {
     var links = document.querySelectorAll(".js-config-link");
@@ -19,11 +10,8 @@
 
       if (value) {
         link.href = value;
-
-        if (key !== "liveDemoBaseUrl") {
-          link.target = "_blank";
-          link.rel = "noreferrer";
-        }
+        link.target = "_blank";
+        link.rel = "noreferrer";
 
         return;
       }
@@ -32,29 +20,6 @@
       link.setAttribute("aria-disabled", "true");
       link.title = "Set " + key + " in site/config.js to enable this link.";
     });
-  }
-
-  function setLiveDemoCopy() {
-    var demoState = document.querySelector(".js-demo-state");
-    var createSnippet = document.querySelector(".js-create-snippet code");
-    var statusSnippet = document.querySelector(".js-status-snippet code");
-    var baseUrl = normalizeBaseUrl(config.liveDemoBaseUrl);
-    var endpointBase = baseUrl || fallbackBaseUrl;
-
-    if (createSnippet) {
-      createSnippet.textContent = "POST " + endpointBase + "/webhook/pmf-brainstorm";
-    }
-
-    if (statusSnippet) {
-      statusSnippet.textContent =
-        "GET " + endpointBase + "/webhook/pmf-brainstorm-status?run_id=YOUR_RUN_ID";
-    }
-
-    if (demoState) {
-      demoState.textContent = baseUrl
-        ? "Live backend configured"
-        : "No live backend configured yet";
-    }
   }
 
   function revealSections() {
@@ -90,7 +55,6 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     setConfigLinks();
-    setLiveDemoCopy();
     revealSections();
   });
 })();

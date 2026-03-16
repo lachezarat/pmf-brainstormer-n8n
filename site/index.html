@@ -46,14 +46,15 @@
 
       <nav class="topnav" aria-label="Primary">
         <a href="#architecture">Architecture</a>
+        <a href="#diagram">Diagram</a>
         <a href="#reliability">Reliability</a>
         <a href="#control-plane">Control Plane</a>
         <a href="#deployment">Deployment</a>
       </nav>
 
       <div class="topbar-actions">
-        <a class="button button-ghost js-config-link" data-config-url="repoUrl" href="#live-demo">GitHub</a>
-        <a class="button button-primary js-config-link" data-config-url="liveDemoBaseUrl" href="#live-demo">Live Backend</a>
+        <a class="button button-ghost js-config-link" data-config-url="repoUrl" href="#top">GitHub</a>
+        <a class="button button-primary" href="#diagram">System Map</a>
       </div>
     </header>
 
@@ -63,14 +64,14 @@
           <p class="eyebrow">Freelance n8n systems for AI-heavy operations</p>
           <h1>Complex automation, built like infrastructure instead of a fragile chain of triggers.</h1>
           <p class="hero-text">
-            This case study packages an async n8n system that accepts inbound requests, runs parallel
-            research, enforces structured LLM outputs across multiple stages, logs every run to a durable
-            store, and surfaces degraded states instead of hiding them.
+            This is a static case study for an async n8n system that accepts inbound requests, runs
+            parallel research, enforces structured LLM outputs across multiple stages, logs every run
+            to a durable store, and surfaces degraded states instead of hiding them.
           </p>
 
           <div class="hero-actions">
             <a class="button button-primary" href="#architecture">Inspect the system</a>
-            <a class="button button-ghost" href="#live-demo">Wire a live demo</a>
+            <a class="button button-ghost" href="#diagram">View the diagram</a>
           </div>
 
           <div class="signal-strip">
@@ -185,6 +186,52 @@
             The public API returns quickly, the long-running work happens asynchronously, and the status endpoint
             exposes the lifecycle without holding a user-facing request open.
           </p>
+        </div>
+
+        <div class="diagram-board" id="diagram">
+          <div class="diagram-row">
+            <article class="diagram-node diagram-node-primary">
+              <span class="diagram-tag">Public request</span>
+              <h3>Async intake webhook</h3>
+              <p>`POST /pmf-brainstorm` validates input, creates the run, returns `202`, and starts orchestration.</p>
+            </article>
+            <div class="diagram-arrow" aria-hidden="true">→</div>
+            <article class="diagram-node">
+              <span class="diagram-tag">Research layer</span>
+              <h3>Exa subflow</h3>
+              <p>Parallel source gathering normalizes external context before any model stage is allowed to proceed.</p>
+            </article>
+            <div class="diagram-arrow" aria-hidden="true">→</div>
+            <article class="diagram-node">
+              <span class="diagram-tag">Stage engine</span>
+              <h3>Gemini stage loop</h3>
+              <p>Five structured stages validate, retry, log attempts, and carry forward explicit warnings.</p>
+            </article>
+            <div class="diagram-arrow" aria-hidden="true">→</div>
+            <article class="diagram-node diagram-node-primary">
+              <span class="diagram-tag">Outcome</span>
+              <h3>Status or review gate</h3>
+              <p>Completed runs resolve immediately. Degraded runs move into `awaiting_review` and require operator action.</p>
+            </article>
+          </div>
+
+          <div class="diagram-support-grid">
+            <article class="diagram-support">
+              <span class="diagram-support-tag">Runtime config</span>
+              <strong>Airtable Prompt Configs</strong>
+              <p>Prompt template, schema version, fallback payload, and retry settings are loaded before each stage when enabled.</p>
+            </article>
+            <article class="diagram-support">
+              <span class="diagram-support-tag">Audit ledger</span>
+              <strong>Postgres run history</strong>
+              <p>`pmf_runs` and `pmf_stage_runs` store lifecycle state, warnings, raw responses, parsed payloads, and final synthesis.</p>
+            </article>
+            <article class="diagram-support">
+              <span class="diagram-support-tag">Failure path</span>
+              <strong>Dedicated error workflow</strong>
+              <p>Hard execution failures are mapped back by execution ID and written as explicit run failures instead of disappearing into logs.</p>
+            </article>
+          </div>
         </div>
 
         <div class="topology">
@@ -401,18 +448,18 @@
       <section class="shell deployment reveal" id="deployment">
         <div class="section-heading">
           <p class="eyebrow">Deployment shape</p>
-          <h2>Static front-end where it belongs. Long-running workflow runtime where it belongs.</h2>
+          <h2>Static portfolio in public. Stateful automation runtime kept behind the backend boundary.</h2>
           <p>
-            Netlify is a good home for the portfolio layer. The n8n runtime, Postgres database, and webhook endpoints
-            should live on a VPS or container host with persistent storage, managed secrets, and proper TLS.
+            This frontend is intentionally static. It explains the architecture, links to the workflow exports, and
+            avoids pretending the public site should host the actual n8n runtime or expose live secrets.
           </p>
         </div>
 
         <div class="deployment-grid">
           <article class="deployment-card">
             <span class="deployment-tag">Public surface</span>
-            <h3>Netlify</h3>
-            <p>Hosts this static case study, assets, and optional demo links. No workflow runtime is forced into a static platform.</p>
+            <h3>Netlify or GitHub Pages</h3>
+            <p>Hosts this static case study, screenshots, and repo links. The public layer stays fast and maintenance-light.</p>
           </article>
           <article class="deployment-card">
             <span class="deployment-tag">Execution layer</span>
@@ -434,50 +481,49 @@
         <div class="deployment-note">
           <strong>Practical rule:</strong>
           <span>
-            deploy the site on Netlify, deploy the automation runtime somewhere stateful, and wire the two together
-            with a public-safe demo URL or a contact-driven walkthrough.
+            publish the static case study, keep the workflow runtime private unless a real demo is needed, and let the
+            GitHub repo carry most of the technical proof.
           </span>
         </div>
       </section>
 
-      <section class="shell live-demo reveal" id="live-demo">
+      <section class="shell evidence reveal" id="evidence">
         <div class="section-heading">
-          <p class="eyebrow">Live backend wiring</p>
-          <h2>Optional, configurable, and safe to publish.</h2>
+          <p class="eyebrow">Static portfolio scope</p>
+          <h2>What visitors can inspect without exposing the actual runtime.</h2>
           <p>
-            This site ships with no hardcoded endpoints or secrets. To attach a live backend later, set the fields in
-            <code>site/config.js</code>. If you leave them blank, the site stays public-safe and still explains the system clearly.
+            The public artifact is the architecture, the workflow exports, the control-plane design, and the
+            documentation. The live automation stack can stay private until there is a concrete reason to expose it.
           </p>
         </div>
 
-        <div class="live-demo-panel">
-          <div class="hero-card live-card">
-            <div class="card-head">
-              <span class="card-label">Current link state</span>
-              <span class="card-meta js-demo-state">No live backend configured yet</span>
-            </div>
-            <ul class="detail-list">
-              <li>Set <code>liveDemoBaseUrl</code> to your deployed n8n base URL or reverse-proxy domain.</li>
-              <li>Set <code>repoUrl</code> to the public GitHub repository for this case study.</li>
-              <li>Set <code>contactUrl</code> if you want a direct inquiry or booking link in the footer.</li>
-            </ul>
-          </div>
+        <div class="evidence-grid">
+          <article class="feature-card evidence-card">
+            <span class="feature-kicker">Public now</span>
+            <h3>Repo, docs, workflow exports, and screenshots</h3>
+            <p>
+              Visitors can inspect the README, the architecture notes, the generated n8n workflow JSON files, the
+              Airtable schema, and curated screenshots without needing backend access.
+            </p>
+          </article>
 
-          <div class="hero-card live-card">
-            <div class="card-head">
-              <span class="card-label">Example create-run call</span>
-              <span class="card-meta">Updates automatically from config</span>
-            </div>
-            <pre class="code-block js-create-snippet"><code>POST https://your-backend.example/webhook/pmf-brainstorm</code></pre>
-          </div>
+          <article class="feature-card evidence-card">
+            <span class="feature-kicker">Private by design</span>
+            <h3>Runtime, secrets, and operator data stay out of the portfolio layer</h3>
+            <p>
+              API keys, the live n8n runtime, the Postgres database, and the Airtable base remain private. The public
+              site proves the system design without turning the portfolio into an attack surface.
+            </p>
+          </article>
 
-          <div class="hero-card live-card">
-            <div class="card-head">
-              <span class="card-label">Example status call</span>
-              <span class="card-meta">Query-based polling</span>
-            </div>
-            <pre class="code-block js-status-snippet"><code>GET https://your-backend.example/webhook/pmf-brainstorm-status?run_id=YOUR_RUN_ID</code></pre>
-          </div>
+          <article class="feature-card evidence-card">
+            <span class="feature-kicker">Best next click</span>
+            <h3>Use GitHub as the technical source of truth</h3>
+            <p>
+              The strongest follow-up from this page is the repository itself: workflow generator, imports, migrations,
+              handoff docs, and the static case-study frontend all live there.
+            </p>
+          </article>
         </div>
       </section>
     </main>

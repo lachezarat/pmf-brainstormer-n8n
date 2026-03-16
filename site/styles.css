@@ -267,10 +267,10 @@ h3 {
 .hero-panel,
 .snapshot,
 .architecture,
+.evidence,
 .reliability,
 .control-plane,
 .deployment,
-.live-demo,
 .footer {
   position: relative;
   z-index: 1;
@@ -477,6 +477,7 @@ h3 {
 
 .snapshot-grid,
 .reliability-grid,
+.evidence-grid,
 .deployment-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -485,9 +486,97 @@ h3 {
 
 .snapshot-card,
 .feature-card,
+.evidence-card,
 .deployment-card {
   padding: 24px;
   min-height: 210px;
+}
+
+.diagram-board {
+  margin-bottom: 22px;
+  padding: 24px;
+  border-radius: calc(var(--radius) + 4px);
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 122, 61, 0.12), transparent 18%),
+    radial-gradient(circle at 88% 22%, rgba(110, 231, 216, 0.12), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012));
+  box-shadow: var(--shadow);
+}
+
+.diagram-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.diagram-node,
+.diagram-support {
+  min-height: 100%;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 55%),
+    rgba(8, 15, 23, 0.78);
+}
+
+.diagram-node-primary {
+  background:
+    radial-gradient(circle at top right, rgba(255, 122, 61, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 55%),
+    rgba(8, 15, 23, 0.82);
+}
+
+.diagram-tag,
+.diagram-support-tag {
+  display: inline-flex;
+  width: fit-content;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagram-tag {
+  color: var(--gold);
+  background: rgba(248, 213, 143, 0.16);
+}
+
+.diagram-support-tag {
+  color: var(--aqua);
+  background: var(--aqua-soft);
+}
+
+.diagram-node h3,
+.diagram-support strong {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 1.08rem;
+}
+
+.diagram-node p,
+.diagram-support p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.diagram-arrow {
+  color: var(--accent);
+  font-size: 2rem;
+  line-height: 1;
+  opacity: 0.86;
+}
+
+.diagram-support-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
 }
 
 .snapshot-index {
@@ -589,16 +678,6 @@ h3 {
   white-space: nowrap;
 }
 
-.live-demo-panel {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.live-card {
-  min-height: 100%;
-}
-
 .footer {
   display: flex;
   align-items: flex-end;
@@ -635,12 +714,17 @@ h3 {
     display: grid;
   }
 
+  .diagram-support-grid,
   .topology {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .live-demo-panel {
+  .diagram-row {
     grid-template-columns: 1fr;
+  }
+
+  .diagram-arrow {
+    display: none;
   }
 }
 
@@ -654,8 +738,10 @@ h3 {
   .hero-actions,
   .footer-actions,
   .signal-strip,
+  .diagram-support-grid,
   .snapshot-grid,
   .reliability-grid,
+  .evidence-grid,
   .deployment-grid,
   .control-map,
   .topology,

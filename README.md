@@ -24,6 +24,25 @@ The parent workflow executes three local-file subflows from the repo:
 - `workflows/subflows/pmf-gemini-stage.json`
 - `workflows/subflows/pmf-airtable-control-plane.json`
 
+```mermaid
+flowchart LR
+    client[Client request] --> intake["POST /webhook/pmf-brainstorm<br/>PMF Brainstormer API"]
+    intake --> ledger[(Postgres<br/>pmf_runs)]
+    intake --> research["pmf-research.json<br/>Parallel Exa research"]
+    research --> stages["pmf-gemini-stage.json<br/>5 structured Gemini stages"]
+    promptcfg["Airtable Prompt Configs"] -. runtime config .-> stages
+    stages --> stagelog[(Postgres<br/>pmf_stage_runs)]
+    stages --> airtable["Airtable control plane<br/>Runs / Attempts / Gates / Experiments"]
+    stages --> status["GET /webhook/pmf-brainstorm-status"]
+    stages --> gate{"Needs review?"}
+    gate -->|yes| review["POST /webhook/pmf-brainstorm-review"]
+    review --> ledger
+    review --> airtable
+    gate -->|no| status
+    intake -. hard execution failure .-> err["PMF Brainstormer Error Handler"]
+    err --> ledger
+```
+
 Execution flow:
 
 1. `POST /webhook/pmf-brainstorm` accepts a request and immediately returns `202`.
@@ -168,7 +187,7 @@ curl -X POST http://localhost:5678/webhook/pmf-brainstorm-review \
 
 This project is intended for a split deployment:
 
-- public portfolio site on Netlify
+- public static portfolio site on Netlify or GitHub Pages
 - `n8n + Postgres` on a VPS with Docker Compose
 - Airtable as the external operator database
 
