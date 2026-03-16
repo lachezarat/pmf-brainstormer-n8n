@@ -1,0 +1,519 @@
+{
+  "name": "PMF Brainstormer Review API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pmf-brainstorm-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e3dc593e-f56e-4825-9075-bf44bb960a00",
+      "name": "Review Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "64fcfda8-72c1-45a1-afdf-91782803c444"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.body || {};\nconst decision = typeof body.decision === 'string' ? body.decision.trim().toLowerCase() : '';\nconst operator = typeof body.operator === 'string' ? body.operator.trim() : '';\nconst notes = typeof body.notes === 'string' ? body.notes.trim() : '';\nconst runId = typeof body.run_id === 'string' ? body.run_id.trim() : '';\nconst allowed = ['approve', 'reject', 'needs_changes'];\n\nif (!runId) {\n  return [{ json: { is_valid: false, http_status: 400, response_body: { error: 'run_id is required' } } }];\n}\n\nif (!allowed.includes(decision)) {\n  return [{ json: { is_valid: false, http_status: 400, response_body: { error: 'decision must be one of approve, reject, needs_changes', run_id: runId } } }];\n}\n\nif (!operator) {\n  return [{ json: { is_valid: false, http_status: 400, response_body: { error: 'operator is required', run_id: runId } } }];\n}\n\nreturn [\n  {\n    json: {\n      is_valid: true,\n      run_id: runId,\n      decision,\n      operator,\n      notes,\n    },\n  },\n];"
+      },
+      "id": "3efb7bf7-dd1e-4fe6-801a-840df4890bb1",
+      "name": "Validate Review Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ee215a2c-5e15-414a-8bcf-7f11337327b4",
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dfd339a0-0d47-44d8-883f-664d00af46b3",
+      "name": "Valid Review Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response_body }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "47ba337a-4816-4229-b695-f42e9eb40458",
+      "name": "Respond Review Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        720,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH target AS (\n  SELECT\n    to_jsonb(r.*) AS run,\n    (\n      SELECT to_jsonb(g.*)\n      FROM pmf_gate_decisions g\n      WHERE g.run_id = r.run_id\n        AND g.gate_type = 'manual_review'\n      LIMIT 1\n    ) AS gate_decision\n  FROM pmf_runs r\n  WHERE r.run_id::text = $1\n  LIMIT 1\n)\nSELECT run, gate_decision FROM target\nUNION ALL\nSELECT NULL::jsonb AS run, NULL::jsonb AS gate_decision\nWHERE NOT EXISTS (SELECT 1 FROM target)\nLIMIT 1;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "7ffe7c32-5d69-4ecc-8a98-fab68b34c7ba",
+      "name": "Load Review Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Validate Review Request\").first().json;\nconst current = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n      ...current,\n    },\n  },\n];"
+      },
+      "id": "1487a50d-4137-4110-9f66-77c79907d3c0",
+      "name": "Restore Review Request Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst run = input.run;\nconst gateDecision = input.gate_decision;\n\nif (!run) {\n  return [{ json: { http_status: 404, response_body: { error: 'run not found', run_id: input.run_id } } }];\n}\n\nif (run.status !== 'awaiting_review') {\n  return [\n    {\n      json: {\n        http_status: 409,\n        response_body: {\n          error: 'run is not awaiting review',\n          run_id: run.run_id,\n          current_status: run.status,\n        },\n      },\n    },\n  ];\n}\n\nconst decisionToStatus = {\n  approve: 'completed',\n  reject: 'rejected',\n  needs_changes: 'needs_changes',\n};\n\nconst decisionStatus = {\n  approve: 'approved',\n  reject: 'rejected',\n  needs_changes: 'needs_changes',\n};\n\nconst reasons = Array.isArray(gateDecision?.review_reasons)\n  ? gateDecision.review_reasons\n  : Array.isArray(run.control_plane_state?.review_gate?.reasons)\n    ? run.control_plane_state.review_gate.reasons\n    : [];\nconst reviewedAt = new Date().toISOString();\nconst reviewGate = {\n  required: true,\n  status: decisionStatus[input.decision],\n  reasons,\n  evaluated_at: run.control_plane_state?.review_gate?.evaluated_at || reviewedAt,\n  reviewed_at: reviewedAt,\n  operator: input.operator,\n  operator_notes: input.notes || '',\n};\nconst controlPlaneState = {\n  ...(run.control_plane_state || {}),\n  review_gate: reviewGate,\n};\nconst updatedFinalOutput = run.final_output\n  ? {\n      ...run.final_output,\n      _metadata: {\n        ...(run.final_output._metadata || {}),\n        review_gate: reviewGate,\n        completed_at: reviewedAt,\n      },\n    }\n  : null;\n\nreturn [\n  {\n    json: {\n      ...input,\n      run_id: run.run_id,\n      run,\n      review_gate: reviewGate,\n      control_plane_state: controlPlaneState,\n      updated_final_output: updatedFinalOutput,\n      final_status: decisionToStatus[input.decision],\n      review_gate_record: {\n        external_key: run.run_id + ':manual_review',\n        gate_type: 'manual_review',\n        decision_status: decisionStatus[input.decision],\n        reasons,\n        operator_name: input.operator,\n        operator_notes: input.notes || '',\n        source: 'operator',\n      },\n      response_body: {\n        run_id: run.run_id,\n        status: decisionToStatus[input.decision],\n        review_gate: reviewGate,\n      },\n      http_status: 200,\n    },\n  },\n];"
+      },
+      "id": "d07256e0-6d53-4ebb-b5bc-732ae5567251",
+      "name": "Prepare Review Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4b0b0cde-5025-446f-a2cf-a12dd99f5abd",
+              "leftValue": "={{ $json.http_status === 200 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4c8ba637-fdb0-4d03-8100-14ab67e0f7e6",
+      "name": "Review Request Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response_body }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "22ba3e40-404c-43d4-a142-1b5625c548c1",
+      "name": "Respond Review Conflict",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1680,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "INSERT INTO pmf_gate_decisions (\n  run_id,\n  external_key,\n  gate_type,\n  decision_status,\n  review_reasons,\n  operator_name,\n  operator_notes,\n  source,\n  created_at,\n  updated_at,\n  decided_at\n)\nVALUES (\n  $1::uuid,\n  $2,\n  $3,\n  $4,\n  $5::jsonb,\n  $6,\n  $7,\n  $8,\n  NOW(),\n  NOW(),\n  CASE\n    WHEN $4 IN ('approved', 'rejected', 'needs_changes', 'auto_approved') THEN NOW()\n    ELSE NULL\n  END\n)\nON CONFLICT (external_key)\nDO UPDATE SET\n  decision_status = EXCLUDED.decision_status,\n  review_reasons = EXCLUDED.review_reasons,\n  operator_name = EXCLUDED.operator_name,\n  operator_notes = EXCLUDED.operator_notes,\n  source = EXCLUDED.source,\n  updated_at = NOW(),\n  decided_at = CASE\n    WHEN EXCLUDED.decision_status IN ('approved', 'rejected', 'needs_changes', 'auto_approved')\n      THEN COALESCE(pmf_gate_decisions.decided_at, NOW())\n    ELSE pmf_gate_decisions.decided_at\n  END\nRETURNING id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, $json.review_gate_record.external_key, $json.review_gate_record.gate_type, $json.review_gate_record.decision_status, JSON.stringify($json.review_gate_record.reasons || []), $json.review_gate_record.operator_name, $json.review_gate_record.operator_notes, $json.review_gate_record.source] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "4d395a93-255b-4c3d-ac5d-7fa3e2f738d8",
+      "name": "Persist Review Gate Decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1680,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Prepare Review Decision\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "437e0f21-1648-4aa2-89f2-14cf5101cfde",
+      "name": "Restore Review Decision Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "UPDATE pmf_runs\nSET\n  status = $2::pmf_run_status,\n  control_plane_state = $3::jsonb,\n  final_output = $4::jsonb,\n  updated_at = NOW(),\n  completed_at = NOW()\nWHERE run_id = $1::uuid\nRETURNING run_id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, $json.final_status, JSON.stringify($json.control_plane_state || {}), JSON.stringify($json.updated_final_output || null)] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "bb4df927-b91b-46fe-b6fc-bb1679a53e1e",
+      "name": "Update Run After Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2160,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Prepare Review Decision\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "7e7fc07c-2948-48cb-8d4b-7f9d0a30e80d",
+      "name": "Restore Review Run Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_final_run',\n    },\n  },\n];"
+      },
+      "id": "0750c1ca-b9a8-44d9-8752-4e932b522621",
+      "name": "Prepare Review Final Control Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "a9fa1aa4-95ce-4b45-b91c-01596cdda5cf",
+      "name": "Review Final Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        2880,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\nconst reviewGate = input.review_gate || input.final_output?._metadata?.review_gate || null;\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      review_gate: reviewGate,\n      review_gate_record: input.review_gate_record || null,\n      airtable_action: 'sync_gate_decision',\n    },\n  },\n];"
+      },
+      "id": "36d05d44-2b9c-4fc2-881c-4c8af92718e6",
+      "name": "Prepare Review Gate Control Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "c03632ae-aad3-4bc6-ae6c-78e3808015f3",
+      "name": "Review Gate Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response_body }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "120c703b-32bf-4829-b236-4b7b93a7df2a",
+      "name": "Respond Review Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3600,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Review Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Review Request": {
+      "main": [
+        [
+          {
+            "node": "Valid Review Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Review Request?": {
+      "main": [
+        [
+          {
+            "node": "Load Review Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Review Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Review Run": {
+      "main": [
+        [
+          {
+            "node": "Restore Review Request Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Review Request Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Review Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Review Decision": {
+      "main": [
+        [
+          {
+            "node": "Review Request Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Request Ready?": {
+      "main": [
+        [
+          {
+            "node": "Persist Review Gate Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Review Conflict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Review Gate Decision": {
+      "main": [
+        [
+          {
+            "node": "Restore Review Decision Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Review Decision Context": {
+      "main": [
+        [
+          {
+            "node": "Update Run After Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Run After Review": {
+      "main": [
+        [
+          {
+            "node": "Restore Review Run Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Review Run Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Review Final Control Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Review Final Control Sync": {
+      "main": [
+        [
+          {
+            "node": "Review Final Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Final Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Review Gate Control Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Review Gate Control Sync": {
+      "main": [
+        [
+          {
+            "node": "Review Gate Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Gate Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Respond Review Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "693e9d8e-22c8-4df9-9dc3-dcd14a1cb6bb",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

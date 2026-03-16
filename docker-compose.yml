@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:1.117.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT}
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      EXECUTIONS_MODE: regular
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_ON_PROGRESS: true
+      N8N_RUNNERS_ENABLED: true
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: false
+      N8N_GIT_NODE_DISABLE_BARE_REPOS: true
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
+      N8N_DIAGNOSTICS_ENABLED: false
+      GENERIC_TIMEZONE: Europe/Sofia
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      EXA_API_KEY: ${EXA_API_KEY}
+      AIRTABLE_CONTROL_PLANE_ENABLED: ${AIRTABLE_CONTROL_PLANE_ENABLED:-false}
+      AIRTABLE_TOKEN: ${AIRTABLE_TOKEN:-}
+      AIRTABLE_BASE_ID: ${AIRTABLE_BASE_ID:-}
+      AIRTABLE_RUNS_TABLE: ${AIRTABLE_RUNS_TABLE:-Runs}
+      AIRTABLE_STAGE_ATTEMPTS_TABLE: ${AIRTABLE_STAGE_ATTEMPTS_TABLE:-Stage Attempts}
+      AIRTABLE_GATE_DECISIONS_TABLE: ${AIRTABLE_GATE_DECISIONS_TABLE:-Gate Decisions}
+      AIRTABLE_EXPERIMENTS_TABLE: ${AIRTABLE_EXPERIMENTS_TABLE:-Experiments}
+      AIRTABLE_PROMPT_CONFIGS_TABLE: ${AIRTABLE_PROMPT_CONFIGS_TABLE:-Prompt Configs}
+    ports:
+      - "${N8N_PORT}:${N8N_PORT}"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./:/files
+
+volumes:
+  postgres_data:
+  n8n_data:

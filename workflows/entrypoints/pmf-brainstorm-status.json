@@ -1,0 +1,117 @@
+{
+  "name": "PMF Brainstormer Status API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "pmf-brainstorm-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "6204544e-f381-4faa-a67d-69db2a62f682",
+      "name": "Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        120
+      ],
+      "webhookId": "2a57be25-0796-461c-9485-80ede5a58cd6"
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH target AS (\n  SELECT\n    to_jsonb(r.*) AS run,\n    (\n      SELECT to_jsonb(g.*)\n      FROM pmf_gate_decisions g\n      WHERE g.run_id = r.run_id\n        AND g.gate_type = 'manual_review'\n      LIMIT 1\n    ) AS gate_decision\n  FROM pmf_runs r\n  WHERE r.run_id::text = $1\n  LIMIT 1\n)\nSELECT run, gate_decision FROM target\nUNION ALL\nSELECT NULL::jsonb AS run, NULL::jsonb AS gate_decision\nWHERE NOT EXISTS (SELECT 1 FROM target)\nLIMIT 1;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.query.run_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "b12772dc-8d58-4705-a152-7620ecddf2f5",
+      "name": "Load Run Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        280,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst runId = $('Status Webhook').first().json.query.run_id;\n\nif (!item.run) {\n  return [\n    {\n      json: {\n        http_status: 404,\n        response_body: {\n          error: 'run not found',\n          run_id: runId,\n        },\n      },\n    },\n  ];\n}\n\nreturn [\n  {\n    json: {\n      http_status: 200,\n      response_body: {\n        run_id: item.run.run_id,\n        status: item.run.status,\n        result: item.run.final_output,\n        warnings: item.run.warnings,\n        error: item.run.error_summary,\n        control_plane: item.run.control_plane_state,\n        gate_decision: item.gate_decision,\n        created_at: item.run.created_at,\n        updated_at: item.run.updated_at,\n        completed_at: item.run.completed_at,\n      },\n    },\n  },\n];"
+      },
+      "id": "29675129-8796-4582-a435-a92911c75c7e",
+      "name": "Format Status Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response_body }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "746839f6-dc73-46e1-8465-f57e6eb46315",
+      "name": "Respond Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        760,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Run Status": {
+      "main": [
+        [
+          {
+            "node": "Format Status Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Status Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "54a148f6-0d16-459d-a592-2094cb37842f",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

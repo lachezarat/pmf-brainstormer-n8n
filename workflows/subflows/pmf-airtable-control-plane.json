@@ -1,0 +1,284 @@
+{
+  "name": "PMF Airtable Control Plane Subflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c71ec3fb-197f-4c5b-8a8e-caa258ac0e88",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst enabled = String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true';\nconst token = ($env.AIRTABLE_TOKEN || '').trim();\nconst baseId = ($env.AIRTABLE_BASE_ID || '').trim();\nconst tableNames = {\n  runs: ($env.AIRTABLE_RUNS_TABLE || 'Runs').trim(),\n  stageAttempts: ($env.AIRTABLE_STAGE_ATTEMPTS_TABLE || 'Stage Attempts').trim(),\n  gateDecisions: ($env.AIRTABLE_GATE_DECISIONS_TABLE || 'Gate Decisions').trim(),\n  experiments: ($env.AIRTABLE_EXPERIMENTS_TABLE || 'Experiments').trim(),\n  promptConfigs: ($env.AIRTABLE_PROMPT_CONFIGS_TABLE || 'Prompt Configs').trim(),\n};\nconst warnings = [...(Array.isArray(input.warnings) ? input.warnings : [])];\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...((input.control_plane_state || {}).airtable || {}),\n    enabled,\n  },\n};\n\nconst buildUrl = (table, recordId = null) => {\n  const encodedBase = encodeURIComponent(baseId);\n  const encodedTable = encodeURIComponent(table);\n  return recordId\n    ? 'https://api.airtable.com/v0/' + encodedBase + '/' + encodedTable + '/' + encodeURIComponent(recordId)\n    : 'https://api.airtable.com/v0/' + encodedBase + '/' + encodedTable;\n};\n\nconst normalizeStageConfig = (stage, source = 'default') => {\n  if (!stage || typeof stage !== 'object') {\n    return null;\n  }\n\n  const maxAttempts = Number(stage.max_attempts);\n  const temperature = Number(stage.temperature);\n\n  return {\n    ...stage,\n    provider: typeof stage.provider === 'string' && stage.provider.trim()\n      ? stage.provider.trim().toLowerCase()\n      : 'gemini',\n    model: typeof stage.model === 'string' ? stage.model.trim() : '',\n    max_attempts: Number.isInteger(maxAttempts)\n      ? Math.min(Math.max(maxAttempts, 1), 3)\n      : 3,\n    temperature: Number.isFinite(temperature)\n      ? Math.min(Math.max(temperature, 0), 1)\n      : 0.2,\n    schema_version: stage.schema_version || 'v1',\n    config_source: source,\n  };\n};\n\nconst slugify = (value) =>\n  String(value || 'item')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/(^-|-$)/g, '')\n    .slice(0, 48) || 'item';\n\nlet airtableRequest = null;\nlet airtableShouldCall = false;\nlet airtableSkipReason = null;\nlet airtableRequestKind = 'write';\nlet stageConfig = normalizeStageConfig(input.stage_config, input.stage_config?.config_source || 'default');\n\nif (!enabled) {\n  airtableSkipReason = 'disabled';\n  if (input.airtable_action === 'load_prompt_config') {\n    stageConfig = normalizeStageConfig(input.default_stage_config || input.stage_config, 'default');\n  }\n} else if (!token || token === 'replace-me' || !baseId || baseId === 'replace-me') {\n  airtableSkipReason = 'missing_credentials';\n  warnings.push('Airtable control plane is enabled but AIRTABLE_TOKEN or AIRTABLE_BASE_ID is missing.');\n  controlPlaneState.airtable.last_error = 'missing_credentials';\n  if (input.airtable_action === 'load_prompt_config') {\n    stageConfig = normalizeStageConfig(input.default_stage_config || input.stage_config, 'default');\n  }\n} else {\n  switch (input.airtable_action) {\n    case 'load_prompt_config': {\n      const stageKey = input.default_stage_config?.key || input.stage_config?.key;\n      if (!stageKey) {\n        airtableSkipReason = 'missing_stage_key';\n        stageConfig = normalizeStageConfig(input.default_stage_config || input.stage_config, 'default');\n        break;\n      }\n\n      airtableShouldCall = true;\n      airtableRequestKind = 'config_lookup';\n      stageConfig = normalizeStageConfig(input.default_stage_config || input.stage_config, 'default');\n      airtableRequest = {\n        method: 'GET',\n        url:\n          buildUrl(tableNames.promptConfigs) +\n          '?maxRecords=1&filterByFormula=' +\n          encodeURIComponent(\n            'AND({Stage Key}=\"' + String(stageKey).replace(/\"/g, '\\\"') + '\",{Enabled}=TRUE())',\n          ),\n      };\n      break;\n    }\n    case 'sync_run': {\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.runs),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['Run ID'],\n          },\n          records: [\n            {\n              fields: {\n                'Run ID': input.run_id,\n                'Status': input.status || 'running',\n                'N8N Execution ID': input.n8n_execution_id,\n                'Idea': input.idea,\n                'Target Audience': input.target_audience,\n                'Monetization Guess': input.monetization_guess,\n                'Warnings JSON': JSON.stringify(warnings),\n                'Control Plane State JSON': JSON.stringify(controlPlaneState),\n                'Created At': new Date().toISOString(),\n              },\n            },\n          ],\n        },\n      };\n      break;\n    }\n    case 'sync_stage_attempts': {\n      const logs = Array.isArray(input.stage_attempt_logs) ? input.stage_attempt_logs : [];\n      if (!logs.length) {\n        airtableSkipReason = 'no_stage_attempts';\n        break;\n      }\n\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.stageAttempts),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['External Key'],\n          },\n          records: logs.map((log) => ({\n            fields: {\n              'External Key': [input.run_id, log.stage_key, log.attempt].join(':'),\n              'Run ID': input.run_id,\n              ...(controlPlaneState.airtable.run_record_id\n                ? { Run: [controlPlaneState.airtable.run_record_id] }\n                : {}),\n              'N8N Execution ID': input.n8n_execution_id,\n              'Stage Key': log.stage_key,\n              'Attempt': log.attempt,\n              'Status': log.status,\n              'Latency MS': log.latency_ms ?? null,\n              'Warning Count': Array.isArray(log.warning_details) ? log.warning_details.length : 0,\n              'Warning Summary': Array.isArray(log.warning_details) ? log.warning_details.join(' | ') : '',\n              'Warning Details JSON': JSON.stringify(log.warning_details || []),\n              'Raw Response JSON': JSON.stringify(log.raw_response || null),\n              'Parsed Response JSON': JSON.stringify(log.parsed_response || null),\n              'Provider': log.provider || '',\n              'Model': log.model || '',\n              'Schema Version': log.schema_version || '',\n              'Config Source': log.config_source || '',\n              'Config Snapshot JSON': JSON.stringify(log.config_snapshot || {}),\n              'Created At': new Date().toISOString(),\n            },\n          })),\n        },\n      };\n      break;\n    }\n    case 'sync_final_run': {\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.runs),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['Run ID'],\n          },\n          records: [\n            {\n              fields: {\n                'Run ID': input.run_id,\n                'Status': input.final_status,\n                'N8N Execution ID': input.n8n_execution_id,\n                'Idea': input.idea,\n                'Target Audience': input.target_audience,\n                'Monetization Guess': input.monetization_guess,\n                'Verdict': input.final_output?.verdict || null,\n                'Overall Score': input.final_output?.overall_score ?? null,\n                'One-line Summary': input.final_output?.one_line_summary || null,\n                'Top Strength': input.final_output?.top_strength || null,\n                'Top Risk': input.final_output?.top_risk || null,\n                'Warnings JSON': JSON.stringify(warnings),\n                'Control Plane State JSON': JSON.stringify(controlPlaneState),\n                'Review Gate Status': input.review_gate?.status || 'not_evaluated',\n                'Review Reasons JSON': JSON.stringify(input.review_gate?.reasons || []),\n                'Completed At': input.final_output?._metadata?.completed_at || null,\n              },\n            },\n          ],\n        },\n      };\n      break;\n    }\n    case 'sync_gate_decision': {\n      const reviewGateRecord = input.review_gate_record;\n      if (!reviewGateRecord) {\n        airtableSkipReason = 'no_gate_required';\n        break;\n      }\n\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.gateDecisions),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['External Key'],\n          },\n          records: [\n            {\n              fields: {\n                'External Key': reviewGateRecord.external_key,\n                'Run ID': input.run_id,\n                ...(controlPlaneState.airtable.run_record_id\n                  ? { Run: [controlPlaneState.airtable.run_record_id] }\n                  : {}),\n                'Gate Type': reviewGateRecord.gate_type || 'manual_review',\n                'Decision Status': reviewGateRecord.decision_status,\n                'Reason Summary': Array.isArray(reviewGateRecord.reasons) ? reviewGateRecord.reasons.join(' | ') : '',\n                'Reason Details JSON': JSON.stringify(reviewGateRecord.reasons || []),\n                'Operator': reviewGateRecord.operator_name || '',\n                'Operator Notes': reviewGateRecord.operator_notes || '',\n                'Source': reviewGateRecord.source || 'system',\n                'Created At': input.review_gate?.evaluated_at || new Date().toISOString(),\n                'Decided At': input.review_gate?.reviewed_at || null,\n              },\n            },\n          ],\n        },\n      };\n      break;\n    }\n    case 'sync_experiments': {\n      const experiments = Array.isArray(input.validation_planner_experiments)\n        ? input.validation_planner_experiments\n        : [];\n      if (!experiments.length) {\n        airtableSkipReason = 'no_experiments';\n        break;\n      }\n\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.experiments),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['External Key'],\n          },\n          records: experiments.map((experiment, index) => ({\n            fields: {\n              'External Key': input.run_id + ':experiment:' + index + ':' + slugify(experiment.name || 'untitled'),\n              'Run ID': input.run_id,\n              ...(controlPlaneState.airtable.run_record_id\n                ? { Run: [controlPlaneState.airtable.run_record_id] }\n                : {}),\n              'Name': experiment.name || 'Untitled experiment',\n              'Description': experiment.description || '',\n              'Cost Estimate': experiment.cost_estimate || '',\n              'Time Estimate': experiment.time_estimate || '',\n              'Success Metric': experiment.success_metric || '',\n              'Status': 'queued',\n              'Created At': new Date().toISOString(),\n            },\n          })),\n        },\n      };\n      break;\n    }\n    case 'sync_failure_run': {\n      airtableShouldCall = true;\n      airtableRequestKind = 'write';\n      airtableRequest = {\n        method: 'PATCH',\n        url: buildUrl(tableNames.runs),\n        body: {\n          typecast: true,\n          performUpsert: {\n            fieldsToMergeOn: ['Run ID'],\n          },\n          records: [\n            {\n              fields: {\n                'Run ID': input.run_id,\n                'Status': 'failed',\n                'Warnings JSON': JSON.stringify(warnings),\n                'Review Gate Status': 'workflow_failed',\n                'Error Summary JSON': JSON.stringify(input.error_summary || null),\n                'Completed At': new Date().toISOString(),\n              },\n            },\n          ],\n        },\n      };\n      break;\n    }\n    default: {\n      airtableSkipReason = 'unsupported_action';\n      break;\n    }\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...input,\n      warnings,\n      control_plane_state: controlPlaneState,\n      stage_config: stageConfig,\n      airtable_request: airtableRequest,\n      airtable_should_call: airtableShouldCall,\n      airtable_skip_reason: airtableSkipReason,\n      airtable_request_kind: airtableRequestKind,\n    },\n  },\n];"
+      },
+      "id": "bff5957a-3071-452e-a5f5-bc8bbd9ea6bc",
+      "name": "Prepare Airtable Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d6ba26cc-2542-49e5-8961-fb387ce18bdd",
+              "leftValue": "={{ $json.airtable_should_call }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "80db20a9-d776-4242-9e04-d1b9c95d8983",
+      "name": "Should Call Airtable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "673e33e8-7a5d-418c-9cd6-d46a598dee14",
+              "leftValue": "={{ $json.airtable_request_kind === \"config_lookup\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "282594ab-42bb-48e5-9cdc-6cc68e6aed35",
+      "name": "Config Lookup Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.airtable_request.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.AIRTABLE_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "99beff0e-c486-431a-954d-ae7db29be257",
+      "name": "Airtable Config Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        -120
+      ],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.airtable_request.method }}",
+        "url": "={{ $json.airtable_request.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.AIRTABLE_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.airtable_request.body }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "20250865-015d-4e36-8a6e-58b250d5a885",
+      "name": "Airtable Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        120
+      ],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Prepare Airtable Request').first().json;\nconst response = $input.first().json;\nconst warnings = [...(Array.isArray(base.warnings) ? base.warnings : [])];\nconst controlPlaneState = {\n  ...(base.control_plane_state || {}),\n  airtable: {\n    ...((base.control_plane_state || {}).airtable || {}),\n    last_action: base.airtable_action,\n    last_synced_at: new Date().toISOString(),\n  },\n};\n\nconst normalizeStageConfig = (stage, source = 'default') => {\n  if (!stage || typeof stage !== 'object') {\n    return null;\n  }\n\n  const maxAttempts = Number(stage.max_attempts);\n  const temperature = Number(stage.temperature);\n\n  return {\n    ...stage,\n    provider: typeof stage.provider === 'string' && stage.provider.trim()\n      ? stage.provider.trim().toLowerCase()\n      : 'gemini',\n    model: typeof stage.model === 'string' ? stage.model.trim() : '',\n    max_attempts: Number.isInteger(maxAttempts)\n      ? Math.min(Math.max(maxAttempts, 1), 3)\n      : 3,\n    temperature: Number.isFinite(temperature)\n      ? Math.min(Math.max(temperature, 0), 1)\n      : 0.2,\n    schema_version: stage.schema_version || 'v1',\n    config_source: source,\n  };\n};\n\nconst parseJsonField = (value, fallback) => {\n  if (value === null || value === undefined || value === '') {\n    return fallback;\n  }\n\n  if (typeof value === 'object') {\n    return value;\n  }\n\n  try {\n    return JSON.parse(value);\n  } catch (error) {\n    return fallback;\n  }\n};\n\nlet stageConfig = base.stage_config || null;\n\nif (response.error) {\n  const message =\n    response.error.message ||\n    response.message ||\n    'Unknown Airtable sync failure';\n\n  warnings.push('Airtable ' + base.airtable_action + ' sync failed: ' + message);\n  controlPlaneState.airtable.last_error = message;\n} else {\n  controlPlaneState.airtable.last_error = null;\n\n  if (base.airtable_action === 'load_prompt_config') {\n    const record = response.records?.[0] || null;\n    const fields = record?.fields || null;\n    const defaultStageConfig = normalizeStageConfig(base.default_stage_config || base.stage_config, 'default');\n\n    if (!fields) {\n      stageConfig = defaultStageConfig;\n      warnings.push('No active Airtable prompt config found for stage ' + (defaultStageConfig?.key || 'unknown') + '. Using default stage config.');\n    } else {\n      const merged = {\n        ...defaultStageConfig,\n        instructions: typeof fields['Prompt Template'] === 'string' && fields['Prompt Template'].trim()\n          ? fields['Prompt Template'].trim()\n          : defaultStageConfig.instructions,\n        schema: parseJsonField(fields['Schema JSON'], defaultStageConfig.schema),\n        fallback: parseJsonField(fields['Fallback JSON'], defaultStageConfig.fallback),\n        required_keys: parseJsonField(fields['Required Keys JSON'], defaultStageConfig.required_keys),\n        provider: typeof fields.Provider === 'string' && fields.Provider.trim()\n          ? fields.Provider.trim().toLowerCase()\n          : defaultStageConfig.provider,\n        model: typeof fields.Model === 'string' ? fields.Model.trim() : defaultStageConfig.model,\n        temperature: fields.Temperature ?? defaultStageConfig.temperature,\n        max_attempts: fields['Max Attempts'] ?? defaultStageConfig.max_attempts,\n        schema_version: fields['Schema Version'] || defaultStageConfig.schema_version,\n        config_source: 'airtable',\n      };\n      stageConfig = normalizeStageConfig(merged, 'airtable');\n      controlPlaneState.airtable.last_prompt_config_record_id = record.id || null;\n    }\n  }\n\n  if (base.airtable_action === 'sync_run') {\n    const recordId = response.records?.[0]?.id || response.id || null;\n    if (recordId) {\n      controlPlaneState.airtable.run_record_id = recordId;\n    }\n  }\n\n  if (base.airtable_action === 'sync_stage_attempts') {\n    controlPlaneState.airtable.stage_attempt_syncs =\n      (controlPlaneState.airtable.stage_attempt_syncs || 0) +\n      (Array.isArray(response.records) ? response.records.length : 0);\n  }\n\n  if (base.airtable_action === 'sync_experiments') {\n    controlPlaneState.airtable.experiment_syncs =\n      (controlPlaneState.airtable.experiment_syncs || 0) +\n      (Array.isArray(response.records) ? response.records.length : 0);\n  }\n\n  if (base.airtable_action === 'sync_gate_decision') {\n    controlPlaneState.airtable.last_gate_record_id = response.records?.[0]?.id || null;\n  }\n}\n\nreturn [\n  {\n    json: {\n      ...base,\n      warnings,\n      control_plane_state: controlPlaneState,\n      stage_config: stageConfig,\n      airtable_response: response,\n    },\n  },\n];"
+      },
+      "id": "1420e1ec-607a-4907-8dc4-e826374ff8da",
+      "name": "Normalize Airtable Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst stageConfig =\n  input.airtable_action === 'load_prompt_config'\n    ? {\n        ...((input.default_stage_config || input.stage_config || {})),\n        config_source: 'default',\n      }\n    : input.stage_config;\nreturn [\n  {\n    json: {\n      ...input,\n      stage_config: stageConfig,\n      airtable_response: {\n        skipped: true,\n        reason: input.airtable_skip_reason || 'skipped',\n      },\n    },\n  },\n];"
+      },
+      "id": "ed8bb56c-7623-4501-81a9-d2e96436e958",
+      "name": "Skip Airtable Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Airtable Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Airtable Request": {
+      "main": [
+        [
+          {
+            "node": "Should Call Airtable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Call Airtable?": {
+      "main": [
+        [
+          {
+            "node": "Config Lookup Request?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Airtable Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Lookup Request?": {
+      "main": [
+        [
+          {
+            "node": "Airtable Config Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Config Lookup": {
+      "main": [
+        [
+          {
+            "node": "Normalize Airtable Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Request": {
+      "main": [
+        [
+          {
+            "node": "Normalize Airtable Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "91c475f4-d0ba-4add-a933-af21180f1aea",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

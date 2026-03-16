@@ -1,0 +1,353 @@
+{
+  "name": "PMF Research Subflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d70e6e5c-7c2f-4b2a-aed1-7f310d2e9866",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...input,\n      warnings: Array.isArray(input.warnings) ? input.warnings : [],\n      analysis_outputs: input.analysis_outputs || {},\n      research_started_at: Date.now(),\n      research_queries: {\n        competitors: input.idea + ' competitor OR alternative',\n        pain_points: input.target_audience + ' pain points forum discussion ' + input.idea,\n        trends: input.idea + ' market demand trend adoption',\n      },\n    },\n  },\n];"
+      },
+      "id": "ba93c3f8-58f4-4db8-bde0-8a6f4f08d47d",
+      "name": "Prepare Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.exa.ai/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.EXA_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ query: $json.research_queries.competitors, numResults: 8, type: 'auto', contents: { text: { maxCharacters: 1200 } }, livecrawl: 'preferred', ...(({})) }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "bc0d4a91-4cc1-4b20-bf2c-2b64d799ae0d",
+      "name": "Exa Competitor Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        -180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.exa.ai/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.EXA_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ query: $json.research_queries.pain_points, numResults: 8, type: 'auto', contents: { text: { maxCharacters: 1200 } }, livecrawl: 'preferred', ...(({ includeDomains: ['reddit.com', 'news.ycombinator.com', 'indiehackers.com'] })) }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "4425ae1e-205b-48f5-82e7-7077c082af88",
+      "name": "Exa Pain Point Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.exa.ai/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.EXA_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({ query: $json.research_queries.trends, numResults: 8, type: 'auto', contents: { text: { maxCharacters: 1200 } }, livecrawl: 'preferred', ...(({})) }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "d4903f40-7432-45cb-ae80-12a37e441fa2",
+      "name": "Exa Trend Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = Array.isArray($json.results) ? $json.results : [];\nreturn [\n  {\n    json: {\n      competitor_results: results.map((result) => ({\n        title: result.title || null,\n        url: result.url || result.id || null,\n        text: result.text || null,\n      })),\n    },\n  },\n];"
+      },
+      "id": "a0d82c61-4e3f-4ce8-ae16-7909e62a465e",
+      "name": "Normalize Competitor Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = Array.isArray($json.results) ? $json.results : [];\nreturn [\n  {\n    json: {\n      pain_point_results: results.map((result) => ({\n        title: result.title || null,\n        url: result.url || result.id || null,\n        text: result.text || null,\n      })),\n    },\n  },\n];"
+      },
+      "id": "877e4129-be58-4571-ab63-f90a71639ddd",
+      "name": "Normalize Pain Point Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = Array.isArray($json.results) ? $json.results : [];\nreturn [\n  {\n    json: {\n      trend_results: results.map((result) => ({\n        title: result.title || null,\n        url: result.url || result.id || null,\n        text: result.text || null,\n      })),\n    },\n  },\n];"
+      },
+      "id": "f529c6b7-e466-45f9-bed6-5c5b632f9f7c",
+      "name": "Normalize Trend Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "dca07986-b5d2-43ae-bd91-157f22fdad8c",
+      "name": "Merge Research Pair One",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1020,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "ed5e1a3e-cdb3-4329-a44d-29c2efdde87e",
+      "name": "Merge Research Pair Two",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1260,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Prepare Queries').first().json;\nconst competitorResults = Array.isArray($json.competitor_results) ? $json.competitor_results : [];\nconst painPointResults = Array.isArray($json.pain_point_results) ? $json.pain_point_results : [];\nconst trendResults = Array.isArray($json.trend_results) ? $json.trend_results : [];\n\nconst sourceCounts = {\n  competitors: competitorResults.length,\n  pain_points: painPointResults.length,\n  trends: trendResults.length,\n};\n\nif (sourceCounts.competitors + sourceCounts.pain_points + sourceCounts.trends === 0) {\n  throw new Error('No usable Exa sources were returned for this run.');\n}\n\nconst warnings = [...(Array.isArray(base.warnings) ? base.warnings : [])];\n\nif (sourceCounts.competitors < 2) warnings.push('Competitor coverage is thin.');\nif (sourceCounts.pain_points < 2) warnings.push('Pain-point coverage is thin.');\nif (sourceCounts.trends < 2) warnings.push('Trend coverage is thin.');\n\nconst researchContext = {\n  competitors: competitorResults,\n  pain_points: painPointResults,\n  trends: trendResults,\n  source_counts: sourceCounts,\n  partial: Object.values(sourceCounts).some((count) => count === 0),\n};\n\nreturn [\n  {\n    json: {\n      ...base,\n      warnings,\n      research_context: researchContext,\n      stage_attempt_logs: [\n        {\n          stage_key: 'research',\n          attempt: 1,\n          status: warnings.length ? 'completed_with_warnings' : 'success',\n          latency_ms: Date.now() - base.research_started_at,\n          warning_details: warnings,\n          raw_response: {\n            competitor_count: sourceCounts.competitors,\n            pain_point_count: sourceCounts.pain_points,\n            trend_count: sourceCounts.trends,\n          },\n          parsed_response: researchContext,\n        },\n      ],\n    },\n  },\n];"
+      },
+      "id": "82c1fe31-1604-4718-96a0-a613ed436ad4",
+      "name": "Normalize Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Queries": {
+      "main": [
+        [
+          {
+            "node": "Exa Competitor Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Exa Pain Point Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Exa Trend Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exa Competitor Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Competitor Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exa Pain Point Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Pain Point Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exa Trend Search": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trend Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Competitor Search": {
+      "main": [
+        [
+          {
+            "node": "Merge Research Pair One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Pain Point Search": {
+      "main": [
+        [
+          {
+            "node": "Merge Research Pair One",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Research Pair One": {
+      "main": [
+        [
+          {
+            "node": "Merge Research Pair Two",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Trend Search": {
+      "main": [
+        [
+          {
+            "node": "Merge Research Pair Two",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Research Pair Two": {
+      "main": [
+        [
+          {
+            "node": "Normalize Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "4f9aa81a-c460-4ee9-84b2-06800d395f9a",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

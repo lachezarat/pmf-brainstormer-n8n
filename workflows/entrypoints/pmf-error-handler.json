@@ -1,0 +1,191 @@
+{
+  "name": "PMF Brainstormer Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9e2f3c94-b4c2-44e1-860d-7a88baffa492",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst execution = input.execution || {};\nconst workflow = input.workflow || {};\nconst summary = {\n  workflow_name: workflow.name || null,\n  workflow_id: workflow.id || null,\n  execution_id: execution.id || null,\n  last_node: execution.lastNodeExecuted || null,\n  message: execution.error?.message || input.message || 'Workflow execution failed',\n  stack: execution.error?.stack || null,\n  mode: execution.mode || null,\n  failed_at: new Date().toISOString(),\n};\n\nreturn [\n  {\n    json: {\n      execution_id: summary.execution_id,\n      error_summary: summary,\n    },\n  },\n];"
+      },
+      "id": "780bb8b0-795a-4535-af9b-cb83ca827cb5",
+      "name": "Build Error Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "UPDATE pmf_runs\nSET\n  status = 'failed',\n  error_summary = $2::jsonb,\n  updated_at = NOW(),\n  completed_at = NOW()\nWHERE n8n_execution_id = $1\nRETURNING run_id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.execution_id, JSON.stringify($json.error_summary)] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "d772d019-7e38-4f2a-bab7-d142c9c7b8a8",
+      "name": "Mark Run Failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Build Error Payload\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "745ada84-1868-4291-93f6-a4c90a7f9491",
+      "name": "Restore Failure Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "SELECT\n  run_id,\n  control_plane_state,\n  warnings,\n  error_summary\nFROM pmf_runs\nWHERE n8n_execution_id = $1\nLIMIT 1;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "baa3bbe1-5580-46a1-afd9-f5fe1c7c3f36",
+      "name": "Load Failed Run State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_failure_run',\n    },\n  },\n];"
+      },
+      "id": "575cd5b4-2b1d-43bf-9d24-935fe08b3d1a",
+      "name": "Prepare Failure Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "6d5076eb-cb91-45d6-bbf5-49b9f3972b94",
+      "name": "Failure Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Error Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Payload": {
+      "main": [
+        [
+          {
+            "node": "Mark Run Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Run Failed": {
+      "main": [
+        [
+          {
+            "node": "Restore Failure Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Failure Context": {
+      "main": [
+        [
+          {
+            "node": "Load Failed Run State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Failed Run State": {
+      "main": [
+        [
+          {
+            "node": "Prepare Failure Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Failure Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Failure Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "ea79ff43-962f-4511-89b4-e782c2017347",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

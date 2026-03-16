@@ -1,0 +1,1774 @@
+{
+  "name": "PMF Brainstormer API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pmf-brainstorm",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "78483e78-0756-4b62-88e6-fb892f211e68",
+      "name": "Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "ebb12181-e6a3-4505-ab7d-b671193805a0"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.body || {};\nconst required = ['idea', 'target_audience', 'monetization_guess'];\nconst sanitize = (value) =>\n  String(value)\n    .replace(/<[^>]*>/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n\nconst cleaned = {};\nconst missing = [];\n\nfor (const field of required) {\n  const value = body[field];\n  if (typeof value !== 'string' || !value.trim()) {\n    missing.push(field);\n  } else {\n    cleaned[field] = sanitize(value);\n  }\n}\n\nif (missing.length) {\n  return [\n    {\n      json: {\n        is_valid: false,\n        http_status: 400,\n        initial_response: {\n          error: 'missing or invalid fields',\n          required,\n          missing,\n        },\n      },\n    },\n  ];\n}\n\nconst runId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {\n  const random = Math.floor(Math.random() * 16);\n  const value = char === 'x' ? random : ((random & 0x3) | 0x8);\n  return value.toString(16);\n});\n\nreturn [\n  {\n    json: {\n      ...cleaned,\n      input_payload: cleaned,\n      research_context: null,\n      analysis_outputs: {},\n      warnings: [],\n      run_id: runId,\n      n8n_execution_id: $execution.id,\n      is_valid: true,\n      http_status: 202,\n      initial_response: {\n        run_id: runId,\n        status: 'accepted',\n        status_url: '/webhook/pmf-brainstorm-status?run_id=' + runId,\n      },\n    },\n  },\n];"
+      },
+      "id": "271abf2c-a4c8-432e-a91d-4d3eb5fe792d",
+      "name": "Validate Intake",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "629a3a61-8ec7-4b31-af89-3e4bad407273",
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "52ff1fb5-6ef0-4fb2-8a3f-cea82ffc1f79",
+      "name": "Valid Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.initial_response }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "d134ac0f-d673-440f-8175-bbd92118ab69",
+      "name": "Respond Invalid",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        720,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "INSERT INTO pmf_runs (\n  run_id,\n  n8n_execution_id,\n  status,\n  idea,\n  target_audience,\n  monetization_guess,\n  input_payload,\n  warnings,\n  created_at,\n  updated_at\n)\nVALUES (\n  $1::uuid,\n  $2,\n  'running',\n  $3,\n  $4,\n  $5,\n  $6::jsonb,\n  $7::jsonb,\n  NOW(),\n  NOW()\n)\nRETURNING run_id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, $json.n8n_execution_id, $json.idea, $json.target_audience, $json.monetization_guess, JSON.stringify($json.input_payload), JSON.stringify($json.warnings || [])] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "d0b066f5-1320-4af3-b165-91e1d632ce5e",
+      "name": "Create Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      ...$('Validate Intake').first().json,\n    },\n  },\n];"
+      },
+      "id": "583729ca-bc71-4e19-963b-9969b58e40bb",
+      "name": "Restore Run Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.initial_response }}",
+        "options": {
+          "responseCode": "={{ $json.http_status }}"
+        }
+      },
+      "id": "ab0bdd4a-a656-4811-9032-826351d7e549",
+      "name": "Respond Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1200,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_run',\n      status: input.status || 'running',\n    },\n  },\n];"
+      },
+      "id": "37ba7192-d632-45c8-b456-8ceaf0969a66",
+      "name": "Prepare Run Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "1beacd11-28d7-4479-8e3e-154fc74da451",
+      "name": "Run Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "UPDATE pmf_runs\nSET\n  control_plane_state = $2::jsonb,\n  updated_at = NOW()\nWHERE run_id = $1::uuid\nRETURNING run_id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.control_plane_state || {})] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "db19fcdf-3108-43ae-a6e9-58e7f6653c85",
+      "name": "Persist Control Plane State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1920,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Run Control Plane Sync\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "63a12ce0-c7ae-47ae-aaeb-47d938cd3496",
+      "name": "Restore Run Control Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-research.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "f78623b0-9b55-4ef3-b3af-803f6448f14c",
+      "name": "Research Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "7c6630bc-37d5-4304-ad2c-31e234d3620a",
+      "name": "Persist Research Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2640,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Research Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "7dd5d507-c9eb-431e-92bb-0457b26ea225",
+      "name": "Restore Research Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "1add10dd-651d-407b-adfc-19b0d76bf651",
+      "name": "Prepare Research Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "1430862a-568f-412d-bea3-52ef630227c0",
+      "name": "Research Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      stage_config: {\n  \"key\": \"market_scanner\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"competitors\",\n    \"market_saturation_score\",\n    \"market_summary\"\n  ],\n  \"system\": \"You are a market analyst. Use only the provided research context. Do not invent companies or pricing.\",\n  \"instructions\": \"Identify notable competitors, explain market saturation, and summarize the whitespace for this idea.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"competitors\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"url\": {\n              \"type\": \"string\"\n            },\n            \"pricing_model\": {\n              \"type\": \"string\"\n            },\n            \"key_features\": {\n              \"type\": \"array\",\n              \"items\": {\n                \"type\": \"string\"\n              }\n            },\n            \"gap_vs_idea\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"gap_vs_idea\"\n          ]\n        }\n      },\n      \"market_saturation_score\": {\n        \"type\": \"number\"\n      },\n      \"market_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"competitors\",\n      \"market_saturation_score\",\n      \"market_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"competitors\": [],\n    \"market_saturation_score\": 50,\n    \"market_summary\": \"Fallback output used because Gemini did not return valid market analysis.\"\n  }\n},\n      default_stage_config: {\n  \"key\": \"market_scanner\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"competitors\",\n    \"market_saturation_score\",\n    \"market_summary\"\n  ],\n  \"system\": \"You are a market analyst. Use only the provided research context. Do not invent companies or pricing.\",\n  \"instructions\": \"Identify notable competitors, explain market saturation, and summarize the whitespace for this idea.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"competitors\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"url\": {\n              \"type\": \"string\"\n            },\n            \"pricing_model\": {\n              \"type\": \"string\"\n            },\n            \"key_features\": {\n              \"type\": \"array\",\n              \"items\": {\n                \"type\": \"string\"\n              }\n            },\n            \"gap_vs_idea\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"gap_vs_idea\"\n          ]\n        }\n      },\n      \"market_saturation_score\": {\n        \"type\": \"number\"\n      },\n      \"market_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"competitors\",\n      \"market_saturation_score\",\n      \"market_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"competitors\": [],\n    \"market_saturation_score\": 50,\n    \"market_summary\": \"Fallback output used because Gemini did not return valid market analysis.\"\n  }\n},\n      airtable_action: 'load_prompt_config',\n    },\n  },\n];"
+      },
+      "id": "794e613a-8daf-4947-93b8-29aced8fba63",
+      "name": "Prepare Market Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "d39cc08f-3607-438d-ae1a-747fda042844",
+      "name": "Load Market Prompt Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        3840,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-gemini-stage.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "74d06097-d4b0-48f9-a656-1cb68cd088cf",
+      "name": "Market Scanner Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        4080,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "04e1ab5c-17a4-416e-9601-e9921d3eda68",
+      "name": "Persist Market Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        4320,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Market Scanner Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "53ba81c5-914e-4f3f-8af0-3b4b22588f48",
+      "name": "Restore Market Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "61ffa5ba-b0c0-42ed-ad17-f3fac9d281bd",
+      "name": "Prepare Market Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4800,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "f7ecf6c5-d22d-4f6e-9350-81c36b2eebe1",
+      "name": "Market Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        5040,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      stage_config: {\n  \"key\": \"persona_builder\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"personas\",\n    \"audience_summary\"\n  ],\n  \"system\": \"You are a product researcher extracting personas from observed pain-point evidence only.\",\n  \"instructions\": \"Produce three distinct personas grounded in the pain-point research. Include JTBD language and willingness to pay.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"personas\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"age_range\": {\n              \"type\": \"string\"\n            },\n            \"frustration\": {\n              \"type\": \"string\"\n            },\n            \"job_to_be_done\": {\n              \"type\": \"string\"\n            },\n            \"willingness_to_pay\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"frustration\",\n            \"job_to_be_done\"\n          ]\n        }\n      },\n      \"audience_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"personas\",\n      \"audience_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"personas\": [],\n    \"audience_summary\": \"Fallback output used because Gemini did not return valid persona analysis.\"\n  }\n},\n      default_stage_config: {\n  \"key\": \"persona_builder\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"personas\",\n    \"audience_summary\"\n  ],\n  \"system\": \"You are a product researcher extracting personas from observed pain-point evidence only.\",\n  \"instructions\": \"Produce three distinct personas grounded in the pain-point research. Include JTBD language and willingness to pay.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"personas\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"age_range\": {\n              \"type\": \"string\"\n            },\n            \"frustration\": {\n              \"type\": \"string\"\n            },\n            \"job_to_be_done\": {\n              \"type\": \"string\"\n            },\n            \"willingness_to_pay\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"frustration\",\n            \"job_to_be_done\"\n          ]\n        }\n      },\n      \"audience_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"personas\",\n      \"audience_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"personas\": [],\n    \"audience_summary\": \"Fallback output used because Gemini did not return valid persona analysis.\"\n  }\n},\n      airtable_action: 'load_prompt_config',\n    },\n  },\n];"
+      },
+      "id": "07990851-9bb2-4e94-abe7-6da1d6f750dd",
+      "name": "Prepare Persona Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "76fe8b62-f76e-4071-b0ba-3df8f1eefbdf",
+      "name": "Load Persona Prompt Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        5520,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-gemini-stage.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ce871e87-8f45-4aec-aab7-af645b5bb1d9",
+      "name": "Persona Builder Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        5760,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "85c434ca-f760-40fd-be05-35f3ec881805",
+      "name": "Persist Persona Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6000,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Persona Builder Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "5025f1ff-75e2-44df-be41-3b27dd828852",
+      "name": "Restore Persona Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6240,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "d707301c-88c7-4820-89e1-eb33a8b555f9",
+      "name": "Prepare Persona Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "307f513e-5fd7-4261-b588-85b759f78345",
+      "name": "Persona Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        6720,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      stage_config: {\n  \"key\": \"risk_assessor\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"objections\",\n    \"regulatory_flags\",\n    \"moat_score\",\n    \"moat_reasoning\"\n  ],\n  \"system\": \"You are a skeptical product strategist focused on downside risk and defensibility.\",\n  \"instructions\": \"Identify likely objections, regulatory flags, and the moat quality of the proposed product.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"objections\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        }\n      },\n      \"regulatory_flags\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        }\n      },\n      \"moat_score\": {\n        \"type\": \"number\"\n      },\n      \"moat_reasoning\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"objections\",\n      \"regulatory_flags\",\n      \"moat_score\",\n      \"moat_reasoning\"\n    ]\n  },\n  \"fallback\": {\n    \"objections\": [\n      \"Fallback output used because Gemini did not return valid risk analysis.\"\n    ],\n    \"regulatory_flags\": [],\n    \"moat_score\": 40,\n    \"moat_reasoning\": \"Fallback output used because Gemini did not return valid risk analysis.\"\n  }\n},\n      default_stage_config: {\n  \"key\": \"risk_assessor\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"objections\",\n    \"regulatory_flags\",\n    \"moat_score\",\n    \"moat_reasoning\"\n  ],\n  \"system\": \"You are a skeptical product strategist focused on downside risk and defensibility.\",\n  \"instructions\": \"Identify likely objections, regulatory flags, and the moat quality of the proposed product.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"objections\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        }\n      },\n      \"regulatory_flags\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"string\"\n        }\n      },\n      \"moat_score\": {\n        \"type\": \"number\"\n      },\n      \"moat_reasoning\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"objections\",\n      \"regulatory_flags\",\n      \"moat_score\",\n      \"moat_reasoning\"\n    ]\n  },\n  \"fallback\": {\n    \"objections\": [\n      \"Fallback output used because Gemini did not return valid risk analysis.\"\n    ],\n    \"regulatory_flags\": [],\n    \"moat_score\": 40,\n    \"moat_reasoning\": \"Fallback output used because Gemini did not return valid risk analysis.\"\n  }\n},\n      airtable_action: 'load_prompt_config',\n    },\n  },\n];"
+      },
+      "id": "c8dfa640-af8f-4451-840e-be7f9005e0ff",
+      "name": "Prepare Risk Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6960,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "70c9e6e3-96d9-482c-8e15-79864d729d02",
+      "name": "Load Risk Prompt Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        7200,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-gemini-stage.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4e840917-9a4c-4274-bd53-af134d860981",
+      "name": "Risk Assessor Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        7440,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "89114ce7-48ef-4be0-8fbc-a76dd550ff30",
+      "name": "Persist Risk Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7680,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Risk Assessor Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "e86b8801-8892-4ebc-9c55-f017a667a73e",
+      "name": "Restore Risk Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7920,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "7ee0a3e3-2dcf-44d0-bb32-cbcffc28eb5b",
+      "name": "Prepare Risk Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8160,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "d7de1445-c812-4593-a29b-02e54ef90842",
+      "name": "Risk Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        8400,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      stage_config: {\n  \"key\": \"validation_planner\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"experiments\",\n    \"validation_summary\"\n  ],\n  \"system\": \"You design cheap, testable experiments for early-stage products.\",\n  \"instructions\": \"Suggest three low-cost validation experiments with clear cost, time, and success metrics.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"experiments\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"description\": {\n              \"type\": \"string\"\n            },\n            \"cost_estimate\": {\n              \"type\": \"string\"\n            },\n            \"time_estimate\": {\n              \"type\": \"string\"\n            },\n            \"success_metric\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"description\",\n            \"success_metric\"\n          ]\n        }\n      },\n      \"validation_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"experiments\",\n      \"validation_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"experiments\": [],\n    \"validation_summary\": \"Fallback output used because Gemini did not return valid validation experiments.\"\n  }\n},\n      default_stage_config: {\n  \"key\": \"validation_planner\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.2,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"experiments\",\n    \"validation_summary\"\n  ],\n  \"system\": \"You design cheap, testable experiments for early-stage products.\",\n  \"instructions\": \"Suggest three low-cost validation experiments with clear cost, time, and success metrics.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"experiments\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"description\": {\n              \"type\": \"string\"\n            },\n            \"cost_estimate\": {\n              \"type\": \"string\"\n            },\n            \"time_estimate\": {\n              \"type\": \"string\"\n            },\n            \"success_metric\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"description\",\n            \"success_metric\"\n          ]\n        }\n      },\n      \"validation_summary\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"experiments\",\n      \"validation_summary\"\n    ]\n  },\n  \"fallback\": {\n    \"experiments\": [],\n    \"validation_summary\": \"Fallback output used because Gemini did not return valid validation experiments.\"\n  }\n},\n      airtable_action: 'load_prompt_config',\n    },\n  },\n];"
+      },
+      "id": "f828e695-0313-4a54-9bc2-99231816bccd",
+      "name": "Prepare Validation Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7440,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "c7003be7-e505-420a-ad89-4f21ffc47057",
+      "name": "Load Validation Prompt Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        7680,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-gemini-stage.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "42b1af48-f140-4473-afaf-1233244c7b88",
+      "name": "Validation Planner Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        9120,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "6bf845d5-f67b-47b2-a2c6-0a062d8caab4",
+      "name": "Persist Validation Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        9360,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Validation Planner Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "3f69399d-b168-4ae3-945b-d028ce757c04",
+      "name": "Restore Validation Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9600,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "05a9f871-3883-4903-bf4f-185c005c7a3f",
+      "name": "Prepare Validation Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9840,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4d90c523-cad4-464b-9b38-a943b811274a",
+      "name": "Validation Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        10080,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      stage_config: {\n  \"key\": \"synthesis\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.15,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"overall_score\",\n    \"verdict\",\n    \"one_line_summary\",\n    \"top_strength\",\n    \"top_risk\",\n    \"recommended_first_action\"\n  ],\n  \"system\": \"You are the synthesis layer. Produce the final PMF scorecard from the provided stage outputs only.\",\n  \"instructions\": \"Choose one verdict from: strong fit, worth validating, weak fit, pivot recommended. Keep the score consistent with the verdict band.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"overall_score\": {\n        \"type\": \"number\"\n      },\n      \"verdict\": {\n        \"type\": \"string\",\n        \"enum\": [\n          \"strong fit\",\n          \"worth validating\",\n          \"weak fit\",\n          \"pivot recommended\"\n        ]\n      },\n      \"one_line_summary\": {\n        \"type\": \"string\"\n      },\n      \"top_strength\": {\n        \"type\": \"string\"\n      },\n      \"top_risk\": {\n        \"type\": \"string\"\n      },\n      \"recommended_first_action\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"overall_score\",\n      \"verdict\",\n      \"one_line_summary\",\n      \"top_strength\",\n      \"top_risk\",\n      \"recommended_first_action\"\n    ]\n  },\n  \"fallback\": {\n    \"overall_score\": 40,\n    \"verdict\": \"weak fit\",\n    \"one_line_summary\": \"Fallback output used because Gemini did not return a valid synthesis.\",\n    \"top_strength\": \"Insufficient model output to determine.\",\n    \"top_risk\": \"Insufficient model output to determine.\",\n    \"recommended_first_action\": \"Review stage outputs manually before acting.\"\n  }\n},\n      default_stage_config: {\n  \"key\": \"synthesis\",\n  \"provider\": \"gemini\",\n  \"model\": \"\",\n  \"temperature\": 0.15,\n  \"max_attempts\": 3,\n  \"schema_version\": \"v1\",\n  \"required_keys\": [\n    \"overall_score\",\n    \"verdict\",\n    \"one_line_summary\",\n    \"top_strength\",\n    \"top_risk\",\n    \"recommended_first_action\"\n  ],\n  \"system\": \"You are the synthesis layer. Produce the final PMF scorecard from the provided stage outputs only.\",\n  \"instructions\": \"Choose one verdict from: strong fit, worth validating, weak fit, pivot recommended. Keep the score consistent with the verdict band.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"overall_score\": {\n        \"type\": \"number\"\n      },\n      \"verdict\": {\n        \"type\": \"string\",\n        \"enum\": [\n          \"strong fit\",\n          \"worth validating\",\n          \"weak fit\",\n          \"pivot recommended\"\n        ]\n      },\n      \"one_line_summary\": {\n        \"type\": \"string\"\n      },\n      \"top_strength\": {\n        \"type\": \"string\"\n      },\n      \"top_risk\": {\n        \"type\": \"string\"\n      },\n      \"recommended_first_action\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"overall_score\",\n      \"verdict\",\n      \"one_line_summary\",\n      \"top_strength\",\n      \"top_risk\",\n      \"recommended_first_action\"\n    ]\n  },\n  \"fallback\": {\n    \"overall_score\": 40,\n    \"verdict\": \"weak fit\",\n    \"one_line_summary\": \"Fallback output used because Gemini did not return a valid synthesis.\",\n    \"top_strength\": \"Insufficient model output to determine.\",\n    \"top_risk\": \"Insufficient model output to determine.\",\n    \"recommended_first_action\": \"Review stage outputs manually before acting.\"\n  }\n},\n      airtable_action: 'load_prompt_config',\n    },\n  },\n];"
+      },
+      "id": "6681b918-32af-4e12-ac1a-d5be394b5c0f",
+      "name": "Prepare Synthesis Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8880,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4c78a561-874f-4d03-bba7-b61bf3856dc8",
+      "name": "Load Synthesis Prompt Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        10560,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-gemini-stage.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "684524ae-daf4-4d58-a59c-e2d298492919",
+      "name": "Synthesis Subflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        10800,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "WITH logs AS (\n  SELECT *\n  FROM jsonb_to_recordset($2::jsonb) AS l(\n    stage_key text,\n    attempt integer,\n    status text,\n    latency_ms integer,\n    warning_details jsonb,\n    raw_response jsonb,\n    parsed_response jsonb,\n    provider text,\n    model text,\n    schema_version text,\n    config_source text,\n    config_snapshot jsonb\n  )\n)\nINSERT INTO pmf_stage_runs (\n  run_id,\n  n8n_execution_id,\n  stage_key,\n  attempt,\n  status,\n  latency_ms,\n  warning_count,\n  warning_details,\n  raw_response,\n  parsed_response,\n  provider,\n  model,\n  schema_version,\n  config_source,\n  config_snapshot\n)\nSELECT\n  $1::uuid,\n  $3,\n  logs.stage_key,\n  logs.attempt,\n  logs.status,\n  logs.latency_ms,\n  COALESCE(jsonb_array_length(COALESCE(logs.warning_details, '[]'::jsonb)), 0),\n  COALESCE(logs.warning_details, '[]'::jsonb),\n  logs.raw_response,\n  logs.parsed_response,\n  logs.provider,\n  logs.model,\n  logs.schema_version,\n  logs.config_source,\n  COALESCE(logs.config_snapshot, '{}'::jsonb)\nFROM logs\nON CONFLICT (run_id, stage_key, attempt)\nDO UPDATE SET\n  n8n_execution_id = EXCLUDED.n8n_execution_id,\n  status = EXCLUDED.status,\n  latency_ms = EXCLUDED.latency_ms,\n  warning_count = EXCLUDED.warning_count,\n  warning_details = EXCLUDED.warning_details,\n  raw_response = EXCLUDED.raw_response,\n  parsed_response = EXCLUDED.parsed_response,\n  provider = EXCLUDED.provider,\n  model = EXCLUDED.model,\n  schema_version = EXCLUDED.schema_version,\n  config_source = EXCLUDED.config_source,\n  config_snapshot = EXCLUDED.config_snapshot;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.stage_attempt_logs || []), $json.n8n_execution_id] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "2ac61e0b-edb1-4335-945c-fab1fcb07049",
+      "name": "Persist Synthesis Logs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        11040,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Synthesis Subflow\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "60f45096-b7d5-4a5e-b554-134930028fa3",
+      "name": "Restore Synthesis Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11280,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_stage_attempts',\n    },\n  },\n];"
+      },
+      "id": "2d33e7f0-7994-47d7-ab8c-37182f384b12",
+      "name": "Prepare Synthesis Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        11520,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ed73642a-9cdb-4e40-9a05-d7c68a743058",
+      "name": "Synthesis Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        11760,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst synthesis = item.analysis_outputs?.synthesis;\n\nif (!synthesis) {\n  throw new Error('Missing synthesis output.');\n}\n\nconst bands = {\n  'strong fit': [75, 100],\n  'worth validating': [50, 74],\n  'weak fit': [30, 49],\n  'pivot recommended': [0, 29],\n};\n\nif (!(synthesis.verdict in bands)) {\n  throw new Error('Invalid verdict: ' + synthesis.verdict);\n}\n\nif (typeof synthesis.overall_score !== 'number' || Number.isNaN(synthesis.overall_score)) {\n  throw new Error('overall_score must be numeric.');\n}\n\nconst [minScore, maxScore] = bands[synthesis.verdict];\nif (synthesis.overall_score < minScore || synthesis.overall_score > maxScore) {\n  throw new Error('overall_score does not match the selected verdict band.');\n}\n\nconst stageIncomplete = Object.values(item.analysis_outputs || {}).some(\n  (value) => value && value.incomplete,\n);\nconst reviewReasons = [];\n\nif (stageIncomplete) {\n  reviewReasons.push('One or more LLM stages exhausted retries and used fallback output.');\n}\n\nif (Array.isArray(item.warnings) && item.warnings.length) {\n  reviewReasons.push('Workflow accumulated warnings that require operator review.');\n}\n\nif (synthesis.overall_score < 55) {\n  reviewReasons.push('Overall score is below the auto-approve threshold.');\n}\n\nif (typeof item.analysis_outputs?.risk_assessor?.moat_score === 'number' && item.analysis_outputs.risk_assessor.moat_score < 35) {\n  reviewReasons.push('Moat score is below the auto-approve threshold.');\n}\n\nconst reviewGate = {\n  required: reviewReasons.length > 0,\n  status: reviewReasons.length > 0 ? 'pending_manual_review' : 'auto_approved',\n  reasons: reviewReasons,\n  evaluated_at: new Date().toISOString(),\n};\n\nconst finalStatus = reviewGate.required ? 'awaiting_review' : 'completed';\n\nconst finalOutput = {\n  run_id: item.run_id,\n  overall_score: synthesis.overall_score,\n  verdict: synthesis.verdict,\n  one_line_summary: synthesis.one_line_summary,\n  top_strength: synthesis.top_strength,\n  top_risk: synthesis.top_risk,\n  recommended_first_action: synthesis.recommended_first_action,\n  market_scanner: item.analysis_outputs.market_scanner,\n  persona_builder: item.analysis_outputs.persona_builder,\n  risk_assessor: item.analysis_outputs.risk_assessor,\n  validation_planner: item.analysis_outputs.validation_planner,\n  synthesis,\n  _metadata: {\n    n8n_execution_id: item.n8n_execution_id,\n    sources_fetched: item.research_context?.source_counts || {},\n    warnings: item.warnings || [],\n    stage_incomplete: stageIncomplete,\n    review_gate: reviewGate,\n    completed_at: reviewGate.required ? null : new Date().toISOString(),\n  },\n};\n\nconst controlPlaneState = {\n  ...(item.control_plane_state || {}),\n  review_gate: reviewGate,\n};\n\nreturn [\n  {\n    json: {\n      ...item,\n      final_status: finalStatus,\n      control_plane_state: controlPlaneState,\n      review_gate: reviewGate,\n      validation_planner_experiments: item.analysis_outputs?.validation_planner?.experiments || [],\n      final_output: finalOutput,\n    },\n  },\n];"
+      },
+      "id": "a825e809-28bc-48ed-8e96-08890aa5bc71",
+      "name": "Finalize Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12000,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst reviewGate = input.review_gate || input.final_output?._metadata?.review_gate || null;\n\nif (!reviewGate || !reviewGate.required) {\n  return [\n    {\n      json: {\n        ...input,\n        review_gate_record: null,\n      },\n    },\n  ];\n}\n\nreturn [\n  {\n    json: {\n      ...input,\n      review_gate: reviewGate,\n      review_gate_record: {\n        external_key: input.run_id + ':manual_review',\n        gate_type: 'manual_review',\n        decision_status: reviewGate.status,\n        reasons: reviewGate.reasons || [],\n        operator_name: null,\n        operator_notes: null,\n        source: 'system',\n      },\n    },\n  },\n];"
+      },
+      "id": "29add73f-fcb4-460d-b09a-a148855bc601",
+      "name": "Prepare Gate Decision Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12240,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d47247ec-5b99-4f52-b3c0-c81190197f05",
+              "leftValue": "={{ !!$json.review_gate_record }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ed5e84c8-af74-4fb8-bda4-b831cac3b466",
+      "name": "Review Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        12480,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "INSERT INTO pmf_gate_decisions (\n  run_id,\n  external_key,\n  gate_type,\n  decision_status,\n  review_reasons,\n  operator_name,\n  operator_notes,\n  source,\n  created_at,\n  updated_at,\n  decided_at\n)\nVALUES (\n  $1::uuid,\n  $2,\n  $3,\n  $4,\n  $5::jsonb,\n  $6,\n  $7,\n  $8,\n  NOW(),\n  NOW(),\n  CASE\n    WHEN $4 IN ('approved', 'rejected', 'needs_changes', 'auto_approved') THEN NOW()\n    ELSE NULL\n  END\n)\nON CONFLICT (external_key)\nDO UPDATE SET\n  decision_status = EXCLUDED.decision_status,\n  review_reasons = EXCLUDED.review_reasons,\n  operator_name = EXCLUDED.operator_name,\n  operator_notes = EXCLUDED.operator_notes,\n  source = EXCLUDED.source,\n  updated_at = NOW(),\n  decided_at = CASE\n    WHEN EXCLUDED.decision_status IN ('approved', 'rejected', 'needs_changes', 'auto_approved')\n      THEN COALESCE(pmf_gate_decisions.decided_at, NOW())\n    ELSE pmf_gate_decisions.decided_at\n  END\nRETURNING id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, $json.review_gate_record.external_key, $json.review_gate_record.gate_type, $json.review_gate_record.decision_status, JSON.stringify($json.review_gate_record.reasons || []), $json.review_gate_record.operator_name, $json.review_gate_record.operator_notes, $json.review_gate_record.source] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "63482da3-7028-4fc0-8b76-cbaa0303c83f",
+      "name": "Persist Gate Decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        12720,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Prepare Gate Decision Record\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "f61ec0fc-fa08-4a63-a989-96646dea124f",
+      "name": "Restore Gate Decision Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12960,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "UPDATE pmf_runs\nSET\n  status = $2::pmf_run_status,\n  research_context = $3::jsonb,\n  analysis_outputs = $4::jsonb,\n  final_output = $5::jsonb,\n  warnings = $6::jsonb,\n  control_plane_state = $7::jsonb,\n  updated_at = NOW(),\n  completed_at = CASE\n    WHEN $2::pmf_run_status IN ('completed', 'rejected', 'needs_changes', 'failed')\n      THEN NOW()\n    ELSE NULL\n  END\nWHERE run_id = $1::uuid\nRETURNING run_id;",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{ [$json.run_id, $json.final_status, JSON.stringify($json.research_context), JSON.stringify($json.analysis_outputs), JSON.stringify($json.final_output), JSON.stringify($json.warnings || []), JSON.stringify($json.control_plane_state || {})] }}",
+          "replaceEmptyStrings": true
+        }
+      },
+      "id": "673296dd-9d19-4636-9f7c-b4b25e07a414",
+      "name": "Persist Final Result",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        13200,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $(\"Prepare Gate Decision Record\").first().json;\n\nreturn [\n  {\n    json: {\n      ...source,\n    },\n  },\n];"
+      },
+      "id": "dfa7a16c-23eb-4ec6-8b30-95324c9ad3d9",
+      "name": "Restore Final Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        13440,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      airtable_action: 'sync_final_run',\n    },\n  },\n];"
+      },
+      "id": "1375742a-4d56-43b3-9ef7-47a0d5d89c8f",
+      "name": "Prepare Final Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        13680,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "84c30d2f-f682-45ac-801c-e0db991cff12",
+      "name": "Final Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        13920,
+        1180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\nconst reviewGate = input.review_gate || input.final_output?._metadata?.review_gate || null;\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      review_gate: reviewGate,\n      review_gate_record: input.review_gate_record || null,\n      airtable_action: 'sync_gate_decision',\n    },\n  },\n];"
+      },
+      "id": "33a5f6f1-711d-423c-b566-43e43b615fe9",
+      "name": "Prepare Gate Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        14160,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4088e676-ab17-4b69-b215-577f417e39ae",
+      "name": "Gate Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        14400,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst controlPlaneState = {\n  ...(input.control_plane_state || {}),\n  airtable: {\n    ...(input.control_plane_state?.airtable || {}),\n    enabled: String($env.AIRTABLE_CONTROL_PLANE_ENABLED || 'false').toLowerCase() === 'true',\n    run_record_id: input.control_plane_state?.airtable?.run_record_id || null,\n    last_action: input.control_plane_state?.airtable?.last_action || null,\n    last_synced_at: input.control_plane_state?.airtable?.last_synced_at || null,\n    last_error: input.control_plane_state?.airtable?.last_error || null,\n    stage_attempt_syncs: input.control_plane_state?.airtable?.stage_attempt_syncs || 0,\n    experiment_syncs: input.control_plane_state?.airtable?.experiment_syncs || 0,\n    last_gate_record_id: input.control_plane_state?.airtable?.last_gate_record_id || null,\n  },\n};\nconst experiments = Array.isArray(input.validation_planner_experiments)\n  ? input.validation_planner_experiments\n  : Array.isArray(input.analysis_outputs?.validation_planner?.experiments)\n    ? input.analysis_outputs.validation_planner.experiments\n    : [];\n\nreturn [\n  {\n    json: {\n      ...input,\n      control_plane_state: controlPlaneState,\n      validation_planner_experiments: experiments,\n      airtable_action: 'sync_experiments',\n    },\n  },\n];"
+      },
+      "id": "3b52ced0-dcf0-45ce-b851-eaf8c3c8d1bc",
+      "name": "Prepare Experiment Control Plane Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        14640,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "source": "localFile",
+        "workflowPath": "/files/workflows/subflows/pmf-airtable-control-plane.json",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "6cb50baf-777a-4efe-9570-4e6197a8154d",
+      "name": "Experiment Control Plane Sync",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        14880,
+        1500
+      ]
+    }
+  ],
+  "connections": {
+    "Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Intake": {
+      "main": [
+        [
+          {
+            "node": "Valid Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Request?": {
+      "main": [
+        [
+          {
+            "node": "Create Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Run": {
+      "main": [
+        [
+          {
+            "node": "Restore Run Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Run Context": {
+      "main": [
+        [
+          {
+            "node": "Respond Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Accepted": {
+      "main": [
+        [
+          {
+            "node": "Prepare Run Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Run Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Run Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Persist Control Plane State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Control Plane State": {
+      "main": [
+        [
+          {
+            "node": "Restore Run Control Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Run Control Context": {
+      "main": [
+        [
+          {
+            "node": "Research Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Research Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Research Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Research Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Research Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Research Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Research Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Research Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Market Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Market Stage": {
+      "main": [
+        [
+          {
+            "node": "Load Market Prompt Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Market Prompt Config": {
+      "main": [
+        [
+          {
+            "node": "Market Scanner Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Scanner Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Market Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Market Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Market Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Market Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Market Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Market Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Market Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Persona Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Persona Stage": {
+      "main": [
+        [
+          {
+            "node": "Load Persona Prompt Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Persona Prompt Config": {
+      "main": [
+        [
+          {
+            "node": "Persona Builder Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persona Builder Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Persona Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Persona Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Persona Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Persona Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Persona Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Persona Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Persona Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persona Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Risk Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Risk Stage": {
+      "main": [
+        [
+          {
+            "node": "Load Risk Prompt Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Risk Prompt Config": {
+      "main": [
+        [
+          {
+            "node": "Risk Assessor Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Assessor Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Risk Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Risk Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Risk Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Risk Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Risk Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Risk Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Risk Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Validation Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Validation Stage": {
+      "main": [
+        [
+          {
+            "node": "Load Validation Prompt Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Validation Prompt Config": {
+      "main": [
+        [
+          {
+            "node": "Validation Planner Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Planner Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Validation Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Validation Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Validation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Validation Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Validation Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Validation Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Validation Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Synthesis Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Synthesis Stage": {
+      "main": [
+        [
+          {
+            "node": "Load Synthesis Prompt Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Synthesis Prompt Config": {
+      "main": [
+        [
+          {
+            "node": "Synthesis Subflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesis Subflow": {
+      "main": [
+        [
+          {
+            "node": "Persist Synthesis Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Synthesis Logs": {
+      "main": [
+        [
+          {
+            "node": "Restore Synthesis Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Synthesis Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Synthesis Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Synthesis Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Synthesis Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesis Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Finalize Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Result": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gate Decision Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gate Decision Record": {
+      "main": [
+        [
+          {
+            "node": "Review Required?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Required?": {
+      "main": [
+        [
+          {
+            "node": "Persist Gate Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Gate Decision": {
+      "main": [
+        [
+          {
+            "node": "Restore Gate Decision Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Gate Decision Context": {
+      "main": [
+        [
+          {
+            "node": "Persist Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Final Result": {
+      "main": [
+        [
+          {
+            "node": "Restore Final Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Final Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Final Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gate Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gate Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Gate Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Prepare Experiment Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Experiment Control Plane Sync": {
+      "main": [
+        [
+          {
+            "node": "Experiment Control Plane Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "2e66bdc4-da7d-4793-aec8-423a0f7e6d90",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

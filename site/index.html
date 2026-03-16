@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PMF Brainstormer | n8n Automation Portfolio</title>
+    <meta
+      name="description"
+      content="A public case study for a modular n8n automation system: async intake, structured AI stages, audit logging, failure gates, and an Airtable control-plane model."
+    >
+    <meta name="theme-color" content="#0b1016">
+    <meta property="og:title" content="PMF Brainstormer | n8n Automation Portfolio">
+    <meta
+      property="og:description"
+      content="Complex n8n orchestration with async APIs, schema-enforced AI outputs, explicit failure handling, and an operator-facing Airtable control plane."
+    >
+    <meta property="og:type" content="website">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+    <div class="grid-mask" aria-hidden="true"></div>
+
+    <header class="topbar shell reveal">
+      <a class="brand" href="#top" aria-label="PMF Brainstormer home">
+        <span class="brand-mark">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+        <span class="brand-copy">
+          <strong>PMF Brainstormer</strong>
+          <small>n8n automation portfolio</small>
+        </span>
+      </a>
+
+      <nav class="topnav" aria-label="Primary">
+        <a href="#architecture">Architecture</a>
+        <a href="#reliability">Reliability</a>
+        <a href="#control-plane">Control Plane</a>
+        <a href="#deployment">Deployment</a>
+      </nav>
+
+      <div class="topbar-actions">
+        <a class="button button-ghost js-config-link" data-config-url="repoUrl" href="#live-demo">GitHub</a>
+        <a class="button button-primary js-config-link" data-config-url="liveDemoBaseUrl" href="#live-demo">Live Backend</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero shell">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Freelance n8n systems for AI-heavy operations</p>
+          <h1>Complex automation, built like infrastructure instead of a fragile chain of triggers.</h1>
+          <p class="hero-text">
+            This case study packages an async n8n system that accepts inbound requests, runs parallel
+            research, enforces structured LLM outputs across multiple stages, logs every run to a durable
+            store, and surfaces degraded states instead of hiding them.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#architecture">Inspect the system</a>
+            <a class="button button-ghost" href="#live-demo">Wire a live demo</a>
+          </div>
+
+          <div class="signal-strip">
+            <div>
+              <span>Design target</span>
+              <strong>Modular, handoff-ready automation</strong>
+            </div>
+            <div>
+              <span>Current stack</span>
+              <strong>n8n + Postgres + Gemini + Exa</strong>
+            </div>
+            <div>
+              <span>Operator layer</span>
+              <strong>Airtable control-plane model</strong>
+            </div>
+          </div>
+        </div>
+
+        <aside class="hero-panel reveal">
+          <div class="hero-card hero-card-primary">
+            <div class="card-head">
+              <span class="card-label">System profile</span>
+              <span class="status-pill">Async by default</span>
+            </div>
+
+            <div class="metric-grid">
+              <article>
+                <strong>4</strong>
+                <span>entry workflows</span>
+              </article>
+              <article>
+                <strong>3</strong>
+                <span>reusable subflows</span>
+              </article>
+              <article>
+                <strong>5</strong>
+                <span>structured AI stages</span>
+              </article>
+              <article>
+                <strong>202</strong>
+                <span>accepted response</span>
+              </article>
+            </div>
+          </div>
+
+          <div class="hero-card">
+            <div class="card-head">
+              <span class="card-label">Request shape</span>
+              <span class="card-meta">Public-safe example</span>
+            </div>
+            <pre class="code-block"><code>{
+  "idea": "AI onboarding copilot",
+  "target_audience": "Seed-stage B2B teams",
+  "monetization_guess": "Usage-based SaaS"
+}</code></pre>
+          </div>
+
+          <div class="hero-card">
+            <div class="card-head">
+              <span class="card-label">Execution stance</span>
+              <span class="card-meta">No silent success</span>
+            </div>
+            <ul class="detail-list">
+              <li>Schema-constrained LLM responses with workflow-side validation</li>
+              <li>Retries, warnings, and explicit incomplete states</li>
+              <li>Error workflow for true execution failures</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+
+      <section class="shell snapshot reveal">
+        <div class="section-heading">
+          <p class="eyebrow">What this project demonstrates</p>
+          <h2>Beyond trigger-action automation</h2>
+          <p>
+            The point of the system is not just “make the API call.” It is orchestration under uncertainty:
+            asynchronous ingress, reusable subflows, structured AI contracts, auditability, and operator-facing
+            controls for degraded runs.
+          </p>
+        </div>
+
+        <div class="snapshot-grid">
+          <article class="snapshot-card">
+            <span class="snapshot-index">01</span>
+            <h3>Architecture</h3>
+            <p>Entrypoint workflows, file-based subflows, persistent run records, and separation between execution and status polling.</p>
+          </article>
+          <article class="snapshot-card">
+            <span class="snapshot-index">02</span>
+            <h3>Reliability</h3>
+            <p>Model-side schemas are not trusted blindly. Every stage is parsed, validated, retried, and logged.</p>
+          </article>
+          <article class="snapshot-card">
+            <span class="snapshot-index">03</span>
+            <h3>Operator visibility</h3>
+            <p>Postgres holds the durable audit trail; Airtable gives non-technical stakeholders a clean control plane.</p>
+          </article>
+          <article class="snapshot-card">
+            <span class="snapshot-index">04</span>
+            <h3>Deployment discipline</h3>
+            <p>Static portfolio on Netlify, workflow runtime on a VPS, no attempt to force n8n into a serverless front-end host.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="shell architecture reveal" id="architecture">
+        <div class="section-heading">
+          <p class="eyebrow">Architecture overview</p>
+          <h2>One intake, multiple specialist stages, visible state all the way through.</h2>
+          <p>
+            The public API returns quickly, the long-running work happens asynchronously, and the status endpoint
+            exposes the lifecycle without holding a user-facing request open.
+          </p>
+        </div>
+
+        <div class="topology">
+          <article class="topology-column">
+            <header>
+              <span class="column-tag">Ingress</span>
+              <h3>API workflows</h3>
+            </header>
+            <div class="stack-card">
+              <strong>POST /pmf-brainstorm</strong>
+              <p>Validates the payload, creates a run row, returns `202`, then starts the orchestration path.</p>
+            </div>
+            <div class="stack-card">
+              <strong>GET /pmf-brainstorm-status</strong>
+              <p>Loads the current run state and final payload without recomputing work.</p>
+            </div>
+            <div class="stack-card">
+              <strong>POST /pmf-brainstorm-review</strong>
+              <p>Accepts operator review decisions for runs that have moved into manual review.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Error workflow</strong>
+              <p>Maps an n8n execution failure back to the run record and marks it failed with an error summary.</p>
+            </div>
+          </article>
+
+          <article class="topology-column">
+            <header>
+              <span class="column-tag">Research</span>
+              <h3>External context pass</h3>
+            </header>
+            <div class="stack-card">
+              <strong>Parallel Exa search</strong>
+              <p>Three research branches execute in parallel, then normalize source quality into a single package.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Minimum source gate</strong>
+              <p>Zero-source or low-signal research raises a visible failure instead of pretending the run is healthy.</p>
+            </div>
+          </article>
+
+          <article class="topology-column">
+            <header>
+              <span class="column-tag">Structured AI</span>
+              <h3>Reusable stage loop</h3>
+            </header>
+            <div class="stack-card">
+              <strong>Market scanner</strong>
+              <p>Opportunity framing, competitor shape, and whitespace signals.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Persona builder</strong>
+              <p>Pains, triggers, jobs-to-be-done, and buying constraints.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Risk assessor + validation planner</strong>
+              <p>Moat risk, GTM risk, test design, and execution suggestions.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Synthesis</strong>
+              <p>Final scorecard, verdict, narrative summary, and review-gate context.</p>
+            </div>
+          </article>
+
+          <article class="topology-column">
+            <header>
+              <span class="column-tag">State</span>
+              <h3>Persistence and visibility</h3>
+            </header>
+            <div class="stack-card">
+              <strong>Postgres audit store</strong>
+              <p>`pmf_runs` captures the lifecycle. `pmf_stage_runs` captures warnings, attempts, raw payloads, and parsed outputs.</p>
+            </div>
+            <div class="stack-card">
+              <strong>Review gate</strong>
+              <p>Low-score or incomplete runs move into `awaiting_review`, then resolve through an explicit operator decision path.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="shell reliability reveal" id="reliability">
+        <div class="section-heading">
+          <p class="eyebrow">Reliability posture</p>
+          <h2>Structured output is treated as a contract to enforce, not marketing copy to trust.</h2>
+          <p>
+            This is the part clients usually care about once a workflow leaves demo-land. The system is designed
+            to make failure states legible and to keep operators from mistaking partial success for clean execution.
+          </p>
+        </div>
+
+        <div class="reliability-grid">
+          <article class="feature-card">
+            <span class="feature-kicker">JSON schema reliability</span>
+            <h3>Model-side constraints plus workflow-side validation</h3>
+            <p>
+              Each Gemini stage is prompted with a schema and then parsed again in code. Required keys, allowed
+              enums, nested object structure, and arrays are checked before the result is treated as valid.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <span class="feature-kicker">Retry discipline</span>
+            <h3>Retries for malformed output and transient API failures</h3>
+            <p>
+              A stage can retry instead of collapsing the entire system on the first bad response, but every
+              degraded outcome is still persisted as a warning, not hidden.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <span class="feature-kicker">Silent-failure prevention</span>
+            <h3>Explicit incomplete states and operator review gates</h3>
+            <p>
+              If a stage cannot produce a compliant payload after retries, it returns an explicit incomplete shape.
+              Final synthesis can move the run into `awaiting_review` rather than bluffing a clean pass.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <span class="feature-kicker">Execution failure path</span>
+            <h3>Dedicated error workflow mapped by n8n execution ID</h3>
+            <p>
+              True execution failures route through a separate error workflow, which updates the run state and
+              stores an error summary in the database.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <span class="feature-kicker">Auditability</span>
+            <h3>Postgres as the durable source of truth</h3>
+            <p>
+              The system stores status, warnings, raw model responses, parsed payloads, and final synthesis so
+              debugging is not dependent on scrolling through n8n execution logs.
+            </p>
+          </article>
+
+          <article class="feature-card">
+            <span class="feature-kicker">Handoff quality</span>
+            <h3>Generated workflow files and documented topology</h3>
+            <p>
+              The repo is structured for export, backup, regeneration, and technical handoff instead of leaving the
+              implementation trapped in a single shared n8n account.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="shell control-plane reveal" id="control-plane">
+        <div class="section-heading">
+          <p class="eyebrow">Airtable control plane</p>
+          <h2>A non-technical operator layer that sits beside the workflow runtime instead of inside it.</h2>
+          <p>
+            For clients who need human review, ownership, prioritization, and a clean operational surface, I pair
+            the Postgres audit store with an Airtable model. Postgres keeps the execution truth; Airtable becomes
+            the control plane people actually work from.
+          </p>
+        </div>
+
+        <div class="control-panel">
+          <div class="control-map">
+            <article class="control-node">
+              <span class="node-tag">01</span>
+              <h3>Runs</h3>
+              <p>Status, verdict, score, warnings, operator owner, and lifecycle timestamps.</p>
+            </article>
+            <article class="control-node">
+              <span class="node-tag">02</span>
+              <h3>Stage Attempts</h3>
+              <p>Per-stage latency, warning counts, attempt number, and parsed-output references for debugging.</p>
+            </article>
+            <article class="control-node">
+              <span class="node-tag">03</span>
+              <h3>Gate Decisions</h3>
+              <p>Human review state for degraded runs, approval notes, and intervention history.</p>
+            </article>
+            <article class="control-node">
+              <span class="node-tag">04</span>
+              <h3>Experiments</h3>
+              <p>Validation-plan actions linked back to each run so execution does not stop at analysis.</p>
+            </article>
+            <article class="control-node">
+              <span class="node-tag">05</span>
+              <h3>Prompt Configs</h3>
+              <p>Runtime-active prompt, schema, fallback, model, and retry settings loaded before each Gemini stage.</p>
+            </article>
+          </div>
+
+          <aside class="control-copy">
+            <div class="stack-card">
+              <strong>Why this matters</strong>
+              <p>
+                n8n is the orchestration engine, not the client’s day-to-day workspace. Airtable fills the gap
+                when a delivery needs review queues, linked records, ownership, and light-weight reporting.
+              </p>
+            </div>
+            <div class="stack-card">
+              <strong>Recommended relationship</strong>
+              <p>
+                Keep Postgres as the durable audit trail. Use Airtable for runtime prompt config, operator
+                workflows, approvals, experiment tracking, and handoff.
+              </p>
+            </div>
+            <div class="stack-card">
+              <strong>Design stance</strong>
+              <p>
+                Airtable should reflect system state, not become the only place where critical execution truth lives.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="shell deployment reveal" id="deployment">
+        <div class="section-heading">
+          <p class="eyebrow">Deployment shape</p>
+          <h2>Static front-end where it belongs. Long-running workflow runtime where it belongs.</h2>
+          <p>
+            Netlify is a good home for the portfolio layer. The n8n runtime, Postgres database, and webhook endpoints
+            should live on a VPS or container host with persistent storage, managed secrets, and proper TLS.
+          </p>
+        </div>
+
+        <div class="deployment-grid">
+          <article class="deployment-card">
+            <span class="deployment-tag">Public surface</span>
+            <h3>Netlify</h3>
+            <p>Hosts this static case study, assets, and optional demo links. No workflow runtime is forced into a static platform.</p>
+          </article>
+          <article class="deployment-card">
+            <span class="deployment-tag">Execution layer</span>
+            <h3>VPS or container host</h3>
+            <p>Runs `n8n + Postgres` via Docker Compose, exposes the async webhook API, and persists workflow state.</p>
+          </article>
+          <article class="deployment-card">
+            <span class="deployment-tag">Operator layer</span>
+            <h3>Airtable</h3>
+            <p>Linked records for runs, stage attempts, experiments, and review-gate decisions.</p>
+          </article>
+          <article class="deployment-card">
+            <span class="deployment-tag">Providers</span>
+            <h3>Gemini and Exa</h3>
+            <p>Research and structured AI stages stay behind the backend boundary so secrets are never embedded in the portfolio site.</p>
+          </article>
+        </div>
+
+        <div class="deployment-note">
+          <strong>Practical rule:</strong>
+          <span>
+            deploy the site on Netlify, deploy the automation runtime somewhere stateful, and wire the two together
+            with a public-safe demo URL or a contact-driven walkthrough.
+          </span>
+        </div>
+      </section>
+
+      <section class="shell live-demo reveal" id="live-demo">
+        <div class="section-heading">
+          <p class="eyebrow">Live backend wiring</p>
+          <h2>Optional, configurable, and safe to publish.</h2>
+          <p>
+            This site ships with no hardcoded endpoints or secrets. To attach a live backend later, set the fields in
+            <code>site/config.js</code>. If you leave them blank, the site stays public-safe and still explains the system clearly.
+          </p>
+        </div>
+
+        <div class="live-demo-panel">
+          <div class="hero-card live-card">
+            <div class="card-head">
+              <span class="card-label">Current link state</span>
+              <span class="card-meta js-demo-state">No live backend configured yet</span>
+            </div>
+            <ul class="detail-list">
+              <li>Set <code>liveDemoBaseUrl</code> to your deployed n8n base URL or reverse-proxy domain.</li>
+              <li>Set <code>repoUrl</code> to the public GitHub repository for this case study.</li>
+              <li>Set <code>contactUrl</code> if you want a direct inquiry or booking link in the footer.</li>
+            </ul>
+          </div>
+
+          <div class="hero-card live-card">
+            <div class="card-head">
+              <span class="card-label">Example create-run call</span>
+              <span class="card-meta">Updates automatically from config</span>
+            </div>
+            <pre class="code-block js-create-snippet"><code>POST https://your-backend.example/webhook/pmf-brainstorm</code></pre>
+          </div>
+
+          <div class="hero-card live-card">
+            <div class="card-head">
+              <span class="card-label">Example status call</span>
+              <span class="card-meta">Query-based polling</span>
+            </div>
+            <pre class="code-block js-status-snippet"><code>GET https://your-backend.example/webhook/pmf-brainstorm-status?run_id=YOUR_RUN_ID</code></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell footer reveal">
+      <div>
+        <p class="eyebrow">Portfolio note</p>
+        <h2>Built to show execution quality, not just UI polish.</h2>
+      </div>
+      <div class="footer-actions">
+        <a class="button button-ghost js-config-link" data-config-url="contactUrl" href="#top">Contact</a>
+        <a class="button button-primary js-config-link" data-config-url="repoUrl" href="#top">Repository</a>
+      </div>
+    </footer>
+  </body>
+</html>
