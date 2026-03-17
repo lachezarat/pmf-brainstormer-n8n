@@ -182,17 +182,6 @@ curl -X POST http://localhost:5678/webhook/pmf-brainstorm-review \
 - [screenshot-checklist.md](docs/screenshot-checklist.md) lists the strongest artifacts to capture for the public repo and portfolio.
 - `node scripts/create-backup-bundle.mjs` exports workflows, docs, fixtures, and migrations into `workflow-backups/`.
 
-## Portfolio Publishing
-
-For the portfolio version of this project, the public proof should stay simple:
-
-- public GitHub repo
-- workflow screenshots
-- Mermaid diagrams
-- Airtable screenshots
-
-No public frontend deployment is required.
-
 ## Optional Live Demo
 
 If you later want a runnable demo, deploy only the backend stack:
@@ -201,10 +190,3 @@ If you later want a runnable demo, deploy only the backend stack:
 - Airtable as the external operator database
 
 See [deployment.md](docs/deployment.md).
-
-## Public Repo Hygiene
-
-- Keep any private planning or brainstorming documents out of the public repo.
-- Do not publish `.env`.
-- Rotate any API keys that were ever stored in a local `.env` before making the repo public.
-- Keep job-specific application drafting material outside the public repo.
