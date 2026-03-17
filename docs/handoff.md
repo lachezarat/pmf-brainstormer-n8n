@@ -80,7 +80,6 @@ The bundle includes:
 - SQL migrations
 - docs
 - fixtures
-- static portfolio site
 
 For an existing database volume, apply:
 

@@ -1,54 +1,39 @@
 # Deployment
 
-## Recommended Shape
+## Portfolio Default
 
-Use a split deployment:
+For this project, the default portfolio setup is:
 
-- Netlify for the public case-study or portfolio frontend
-- a VPS for `n8n + Postgres`
-- Airtable as the external operator database
+- public GitHub repository
+- workflow screenshots
+- Mermaid diagrams in the docs
+- Airtable screenshots if the control plane is enabled
 
-This project should not run entirely on Netlify. The long-lived n8n service and Postgres database belong on a VPS or similar container host.
+That is enough to present the architecture without publishing a live runtime.
 
-## VPS Layout
+## If You Later Want A Live Demo
 
-Recommended services:
+Only deploy the backend stack:
 
 - `n8n`
 - `postgres`
 - reverse proxy with TLS
 
-The simplest production-style setup is still Docker Compose on a VPS.
+The simplest production-style setup is Docker Compose on a VPS or similar container host with persistent storage.
 
 ## Public Access Pattern
 
-Expose only:
+If you choose to expose a live demo later, keep the public surface narrow:
 
 - `POST /webhook/pmf-brainstorm`
 - `GET /webhook/pmf-brainstorm-status?run_id=<run_id>`
 - `POST /webhook/pmf-brainstorm-review`
 
-Protect the public demo with:
+Protect it with:
 
-- basic auth or demo key for preview environments
+- basic auth or a demo key
 - rate limiting
 - a portfolio-only domain or subdomain
-
-Suggested domain split:
-
-- `portfolio.example.com` for Netlify
-- `api.example.com` for the workflow backend
-
-## Netlify Role
-
-Netlify is best used here for:
-
-- static portfolio pages
-- case-study content
-- screenshots and architecture copy
-- optional lightweight redirect/proxy behavior if you want a nicer frontend path
-
-The actual workflow runtime stays on the VPS.
 
 ## Operational Checklist
 

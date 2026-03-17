@@ -1,6 +1,6 @@
 # Screenshot Checklist
 
-Capture these before publishing the repo or portfolio page:
+Capture these before publishing the repo or assembling the portfolio submission:
 
 1. `PMF Brainstormer API`
    - take two kinds of shots, not one giant unreadable canvas

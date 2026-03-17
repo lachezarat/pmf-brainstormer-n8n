@@ -85,12 +85,13 @@ This makes degraded states inspectable and keeps later stages from assuming that
 
 ## Deployment Recommendation
 
-- static portfolio site on Netlify
-- `n8n + Postgres` on a VPS or container host with persistent storage
+- public GitHub repository for the source of truth
+- screenshots and Mermaid diagrams for the portfolio presentation layer
+- optional `n8n + Postgres` on a VPS or container host if a live demo is ever needed
 - Airtable as SaaS
 - Gemini and Exa secrets held only on the backend
 
-Netlify is a good host for the public case study. It is not the right place to run the long-lived `n8n` runtime itself.
+No frontend deployment is required for the portfolio version of this project.
 
 ## What Makes This Portfolio Piece Useful
 
@@ -102,5 +103,3 @@ This project is designed to show the parts of automation work that usually matte
 - persistence
 - operator visibility
 - deployment realism
-
-The public site in `site/` is static and safe to publish. Live backend links are configured through `site/config.js`, which contains placeholders only.

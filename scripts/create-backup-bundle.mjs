@@ -12,8 +12,6 @@ const pathsToCopy = [
   'postgres/init',
   'fixtures',
   'docs',
-  'site',
-  'netlify.toml',
   'README.md',
 ];
 
@@ -34,7 +32,7 @@ writeFileSync(
     {
       created_at: new Date().toISOString(),
       included_paths: pathsToCopy,
-      notes: 'Generated workflow backup bundle for portfolio/demo handoff.',
+      notes: 'Generated workflow backup bundle for repo handoff and restore.',
     },
     null,
     2,

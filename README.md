@@ -90,9 +90,8 @@ For the fastest working setup, use the importable Airtable templates in [fixture
 - `scripts/create-backup-bundle.mjs`: workflow export/backup helper
 - `workflows/entrypoints/`: import these into n8n
 - `workflows/subflows/`: loaded from disk by the parent workflow
-- `docs/`: architecture, Airtable, deployment, handoff, and case-study notes
+- `docs/`: architecture, Airtable, deployment, handoff, case-study, and screenshot notes
 - `fixtures/`: sample API payloads and Airtable seed data
-- `site/`: static portfolio site for Netlify or any static host
 
 ## Local Setup
 
@@ -181,17 +180,25 @@ curl -X POST http://localhost:5678/webhook/pmf-brainstorm-review \
 - [airtable-setup.md](docs/airtable-setup.md) is the exact Airtable bootstrap guide with field types and env steps.
 - [handoff.md](docs/handoff.md) covers import order, credentials, Airtable setup, and restore steps.
 - [screenshot-checklist.md](docs/screenshot-checklist.md) lists the strongest artifacts to capture for the public repo and portfolio.
-- `node scripts/create-backup-bundle.mjs` exports workflows, docs, fixtures, and the static site into `workflow-backups/`.
+- `node scripts/create-backup-bundle.mjs` exports workflows, docs, fixtures, and migrations into `workflow-backups/`.
 
 ## Deployment Shape
 
-This project is intended for a split deployment:
+For portfolio use, no public frontend deployment is required.
 
-- public static portfolio site on Netlify or GitHub Pages
+The recommended public proof set is:
+
+- public GitHub repo
+- workflow screenshots
+- Mermaid diagrams
+- Airtable screenshots
+
+If you later want a live demo backend, use:
+
 - `n8n + Postgres` on a VPS with Docker Compose
 - Airtable as the external operator database
 
-Netlify should host the case-study frontend, not the `n8n` runtime itself. See [deployment.md](docs/deployment.md).
+See [deployment.md](docs/deployment.md).
 
 ## Portfolio Notes
 
